@@ -23,7 +23,7 @@ import java.util.Map;
 import static brave.secondary_sampling.SecondarySampling.parseParameters;
 
 /**
- * This extracts the {@link SecondarySampling#FIELD_NAME sampling header}, and performs any TTL or
+ * This extracts the {@link SecondarySampling#fieldName sampling header}, and performs any TTL or
  * triggering logic based on the policy configured for this service.
  */
 final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
@@ -54,8 +54,8 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
       String samplingKey = nameParameters[0];
 
       Map<String, String> parameters = nameParameters.length > 1
-          ? parseParameters(nameParameters)
-          : new LinkedHashMap<>();
+        ? parseParameters(nameParameters)
+        : new LinkedHashMap<>();
       if (updateparametersAndSample(samplingKey, parameters)) {
         extra.sampledKeys.add(samplingKey);
         builder.sampledLocal(); // this means data will be recorded

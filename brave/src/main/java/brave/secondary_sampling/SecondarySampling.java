@@ -21,6 +21,7 @@ import brave.propagation.TraceContext;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,18 +29,79 @@ import java.util.Set;
  * This is a <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">Secondary
  * Sampling</a> proof of concept.
  */
-final class SecondarySampling extends Propagation.Factory implements TracingCustomizer {
-  static final String FIELD_NAME = "sampling";
+public final class SecondarySampling extends Propagation.Factory implements TracingCustomizer {
+  public static Builder newBuilder() {
+    return new Builder();
+  }
 
-  final String localServiceName;
+  public static final class Builder {
+    String fieldName = "sampling", tagName = "sampled_keys", localServiceName;
+    Propagation.Factory propagationFactory;
+    SecondarySamplingPolicy policy;
+
+    /** The ascii lowercase propagation field name to use. Defaults to {@code sampling}. */
+    public Builder fieldName(String fieldName) {
+      this.fieldName = validateAndLowercase(fieldName, "field");
+      return this;
+    }
+
+    /** The ascii lowercase tag name to use. Defaults to {@code sampled_keys}. */
+    public Builder tagName(String tagName) {
+      this.tagName = validateAndLowercase(tagName, "tag");
+      return this;
+    }
+
+    /**
+     * Use the same value normally passed to {@link Tracing.Builder#localServiceName(String)}
+     *
+     * <p>This is used for {@link SecondarySamplingPolicy#getTriggerForService(String, String)}
+     */
+    public Builder localServiceName(String localServiceName) {
+      this.localServiceName = validateAndLowercase(localServiceName, "service");
+      return this;
+    }
+
+    /**
+     * Use the same value normally passed to {@link Tracing.Builder#propagationFactory(brave.propagation.Propagation.Factory)}
+     *
+     * <p>This controls the primary propagation mechanism.
+     */
+    public Builder propagationFactory(Propagation.Factory propagationFactory) {
+      if (propagationFactory == null) throw new NullPointerException("propagationFactory == null");
+      this.propagationFactory = propagationFactory;
+      return this;
+    }
+
+    /**
+     * Populate this with the same data passed to {@link Tracing.Builder#propagationFactory(brave.propagation.Propagation.Factory)}
+     */
+    public Builder policy(SecondarySamplingPolicy policy) {
+      if (policy == null) throw new NullPointerException("policy == null");
+      this.policy = policy;
+      return this;
+    }
+
+    public SecondarySampling build() {
+      if (localServiceName == null) throw new NullPointerException("localServiceName == null");
+      if (propagationFactory == null) throw new NullPointerException("propagationFactory == null");
+      if (policy == null) throw new NullPointerException("policy == null");
+      return new SecondarySampling(this);
+    }
+
+    Builder() {
+    }
+  }
+
+  final String fieldName, tagName, localServiceName;
   final Propagation.Factory delegate;
   final SecondarySamplingPolicy policy;
 
-  SecondarySampling(String localServiceName, Propagation.Factory propagationFactory,
-      SecondarySamplingPolicy policy) {
-    this.localServiceName = localServiceName;
-    this.delegate = propagationFactory;
-    this.policy = policy;
+  SecondarySampling(Builder builder) {
+    this.fieldName = builder.fieldName;
+    this.tagName = builder.tagName;
+    this.localServiceName = builder.localServiceName;
+    this.delegate = builder.propagationFactory;
+    this.policy = builder.policy;
   }
 
   @Override public boolean supportsJoin() {
@@ -48,7 +110,7 @@ final class SecondarySampling extends Propagation.Factory implements TracingCust
 
   @Override public <K> Propagation<K> create(KeyFactory<K> keyFactory) {
     if (keyFactory == null) throw new NullPointerException("keyFactory == null");
-    return new Propagation<>(delegate.create(keyFactory), keyFactory.create(FIELD_NAME), this);
+    return new Propagation<>(delegate.create(keyFactory), keyFactory.create(fieldName), this);
   }
 
   @Override public boolean requires128BitTraceId() {
@@ -60,9 +122,9 @@ final class SecondarySampling extends Propagation.Factory implements TracingCust
   }
 
   @Override public void customize(Tracing.Builder builder) {
-    builder.addFinishedSpanHandler(new SecondarySamplingFinishedSpanHandler())
-        .propagationFactory(this)
-        .alwaysReportSpans();
+    builder.addFinishedSpanHandler(new SecondarySamplingFinishedSpanHandler(tagName))
+      .propagationFactory(this)
+      .alwaysReportSpans();
   }
 
   /** This state is added to every span. A real implementation would be memory conscious. */
@@ -77,7 +139,7 @@ final class SecondarySampling extends Propagation.Factory implements TracingCust
     final SecondarySampling secondarySampling;
 
     Propagation(brave.propagation.Propagation<K> delegate, K samplingKey,
-        SecondarySampling secondarySampling) {
+      SecondarySampling secondarySampling) {
       this.delegate = delegate;
       this.samplingKey = samplingKey;
       this.secondarySampling = secondarySampling;
@@ -106,5 +168,12 @@ final class SecondarySampling extends Propagation.Factory implements TracingCust
       result.put(nameValue[0], nameValue[1]);
     }
     return result;
+  }
+
+  static String validateAndLowercase(String name, String title) {
+    if (name == null || name.isEmpty()) {
+      throw new IllegalArgumentException(name + " is not a valid " + title + " name");
+    }
+    return name.toLowerCase(Locale.ROOT);
   }
 }

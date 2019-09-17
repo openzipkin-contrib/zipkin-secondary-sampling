@@ -19,17 +19,17 @@ import brave.sampler.Sampler;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-final class TestSecondarySamplingPolicy implements SecondarySamplingPolicy {
-  static final class TestTrigger implements SecondarySamplingPolicy.Trigger {
+public final class TestSecondarySamplingPolicy implements SecondarySamplingPolicy {
+  public static final class TestTrigger implements SecondarySamplingPolicy.Trigger {
     Sampler sampler = Sampler.ALWAYS_SAMPLE;
     int ttl = 0; // zero means don't add ttl
 
-    TestTrigger rps(int rps) {
+    public TestTrigger rps(int rps) {
       this.sampler = RateLimitingSampler.create(rps);
       return this;
     }
 
-    TestTrigger ttl(int ttl) {
+    public TestTrigger ttl(int ttl) {
       this.ttl = ttl;
       return this;
     }
@@ -52,7 +52,8 @@ final class TestSecondarySamplingPolicy implements SecondarySamplingPolicy {
     return this;
   }
 
-  TestSecondarySamplingPolicy addTrigger(String samplingKey, String serviceName, Trigger trigger) {
+  public TestSecondarySamplingPolicy addTrigger(String samplingKey, String serviceName,
+    Trigger trigger) {
     getByService(samplingKey).put(serviceName, trigger);
     return this;
   }
@@ -63,7 +64,7 @@ final class TestSecondarySamplingPolicy implements SecondarySamplingPolicy {
     return this;
   }
 
-  TestSecondarySamplingPolicy merge(TestSecondarySamplingPolicy input) {
+  public TestSecondarySamplingPolicy merge(TestSecondarySamplingPolicy input) {
     allServices.putAll(input.allServices);
     byService.putAll(input.byService);
     return this;
@@ -74,7 +75,7 @@ final class TestSecondarySamplingPolicy implements SecondarySamplingPolicy {
     return result != null ? result : allServices.get(samplingKey);
   }
 
-  @Override public Map<String, Trigger> getByService(String samplingKey) {
+  Map<String, Trigger> getByService(String samplingKey) {
     return byService.computeIfAbsent(samplingKey, k -> new LinkedHashMap<>());
   }
 }

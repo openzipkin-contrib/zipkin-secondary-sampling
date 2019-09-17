@@ -22,7 +22,7 @@ import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 /**
- * This writes the {@link SecondarySampling#FIELD_NAME sampling header}, with an updated {@code
+ * This writes the {@link SecondarySampling#fieldName sampling header}, with an updated {@code
  * spanId} parameters for each sampled key. The Zipkin endpoint can use that span ID to correct the
  * parent hierarchy.
  */
@@ -46,13 +46,13 @@ final class SecondarySamplingInjector<C, K> implements Injector<C> {
 
   static String serializeWithSpanId(Extra extra, String spanId) {
     return extra.samplingKeyToParameters.entrySet()
-        .stream()
-        .map(e -> serializeWithSpanId(extra, e.getKey(), e.getValue(), spanId))
-        .collect(Collectors.joining(","));
+      .stream()
+      .map(e -> serializeWithSpanId(extra, e.getKey(), e.getValue(), spanId))
+      .collect(Collectors.joining(","));
   }
 
   static String serializeWithSpanId(Extra extra, String samplingKey, Map<String, String> parameters,
-      String spanId) {
+    String spanId) {
     StringJoiner joiner = new StringJoiner(";");
     joiner.add(samplingKey);
     String lastSpanId = null;
