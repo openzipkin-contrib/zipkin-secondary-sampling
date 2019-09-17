@@ -19,16 +19,20 @@ import brave.secondary_sampling.SecondarySampling.Extra;
 import java.util.StringJoiner;
 
 /**
- * This writes the {@link #TAG_NAME sampled_keys tag} needed by the Zipkin endpoint to route data
+ * This writes the {@link #tagName sampled_keys tag} needed by the Zipkin endpoint to route data
  * correctly, and fix any hierarchy problems created by missing spans:
  *
  * <h3>The {@code parentId} parameter of a {@code sampled_keys} entry</h3>
  * If the {@code spanId} parameter of a sampling key doesn't match the current parent of a local
- * root, it is copied as the {@code parentId} parameter of the corresponding {@link #TAG_NAME
+ * root, it is copied as the {@code parentId} parameter of the corresponding {@link #tagName
  * sampled_keys entry}. This allows the trace forwarder to fix the hierarchy for this participant.
  */
 final class SecondarySamplingFinishedSpanHandler extends brave.handler.FinishedSpanHandler {
-  static final String TAG_NAME = "sampled_keys";
+  final String tagName;
+
+  SecondarySamplingFinishedSpanHandler(String tagName) {
+    this.tagName = tagName;
+  }
 
   @Override public boolean handle(TraceContext context, MutableSpan span) {
     StringJoiner joiner = new StringJoiner(",");
@@ -51,7 +55,7 @@ final class SecondarySamplingFinishedSpanHandler extends brave.handler.FinishedS
       }
     }
 
-    if (joiner.length() != 0) span.tag(TAG_NAME, joiner.toString());
+    if (joiner.length() != 0) span.tag(tagName, joiner.toString());
     return true;
   }
 }

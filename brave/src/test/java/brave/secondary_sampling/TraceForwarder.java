@@ -26,11 +26,11 @@ import static java.util.Arrays.asList;
  * This is a simulation of <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md#the-trace-forwarder">Trace
  * Forwarder</a>.
  *
- * <p>Specifically, this processes the {@link SecondarySamplingFinishedSpanHandler#TAG_NAME
+ * <p>Specifically, this processes the {@link SecondarySamplingFinishedSpanHandler#tagName
  * sampled_keys tag} created by the {@link SecondarySamplingFinishedSpanHandler} like so.
  * <pre>
  *   <ol>
- *     <li>Drops the {@link SecondarySamplingFinishedSpanHandler#TAG_NAME sampled_keys tag}</li>
+ *     <li>Drops the {@link SecondarySamplingFinishedSpanHandler#tagName sampled_keys tag}</li>
  *     <li>Corrects hierarchy upon a {@code parentId} sampling key parameter as needed</li>
  *     <li>Forwards data to the sampling key participant</li>
  *   </ol>
@@ -42,8 +42,8 @@ import static java.util.Arrays.asList;
  * parent ID is saved off as a tag {@code linkedParentId}, allowing the user, UI or other processors
  * to know the hierarchy was rewritten at that point.
  */
-final class TraceForwarder implements Reporter<Span> {
-  static final Callback<Void> NOOP_CALLBACK = new Callback<Void>() {
+public final class TraceForwarder implements Reporter<Span> {
+  public static final Callback<Void> NOOP_CALLBACK = new Callback<Void>() {
     @Override public void onSuccess(Void aVoid) {
     }
 
@@ -52,7 +52,7 @@ final class TraceForwarder implements Reporter<Span> {
   };
   Map<String, SpanConsumer> samplingKeyToSpanConsumer = new LinkedHashMap<>();
 
-  TraceForwarder configureSamplingKey(String samplingKey, SpanConsumer consumer) {
+  public TraceForwarder configureSamplingKey(String samplingKey, SpanConsumer consumer) {
     samplingKeyToSpanConsumer.put(samplingKey, consumer);
     return this;
   }

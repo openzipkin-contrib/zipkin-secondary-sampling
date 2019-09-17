@@ -14,9 +14,8 @@
 package brave.secondary_sampling;
 
 import brave.internal.Nullable;
-import java.util.Map;
 
-interface SecondarySamplingPolicy {
+public interface SecondarySamplingPolicy {
   interface Trigger {
     boolean isSampled();
 
@@ -25,6 +24,4 @@ interface SecondarySamplingPolicy {
   }
 
   @Nullable Trigger getTriggerForService(String samplingKey, String serviceName);
-
-  Map<String, Trigger> getByService(String samplingKey);
 }

@@ -38,8 +38,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class SecondarySamplingTest {
   String serviceName = "auth", notServiceName = "gateway", notSpanId = "19f84f102048e047";
   TestSecondarySamplingPolicy policy = new TestSecondarySamplingPolicy();
-  SecondarySampling secondarySampling =
-      new SecondarySampling(serviceName, B3SinglePropagation.FACTORY, policy);
+  SecondarySampling secondarySampling = SecondarySampling.newBuilder()
+    .localServiceName(serviceName)
+    .propagationFactory(B3SinglePropagation.FACTORY)
+    .policy(policy)
+    .build();
 
   Propagation<String> propagation = secondarySampling.create(STRING);
 
@@ -71,11 +74,11 @@ public class SecondarySamplingTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(headers);
     Extra extra = (Extra) extracted.extra().get(0);
     assertThat(extra.sampledKeys)
-        .containsExactly("authcache"); // not links because there's no trigger for that
+      .containsExactly("authcache"); // not links because there's no trigger for that
 
     assertThat(extra.samplingKeyToParameters)
-        .containsEntry("links", emptyMap())
-        .containsEntry("authcache", emptyMap()); // no TTL left for the next  hop
+      .containsEntry("links", emptyMap())
+      .containsEntry("authcache", emptyMap()); // no TTL left for the next  hop
   }
 
   /** This shows an example of dynamic configuration */
@@ -108,13 +111,13 @@ public class SecondarySamplingTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(headers);
     Extra extra = (Extra) extracted.extra().get(0);
     assertThat(extra.sampledKeys)
-        .containsExactly("links", "authcache"); // not gatewayplay as we aren't in that service
+      .containsExactly("links", "authcache"); // not gatewayplay as we aren't in that service
 
     assertThat(extra.samplingKeyToParameters)
-        .containsEntry("gatewayplay", emptyMap())
-        .containsEntry("links", emptyMap())
-        // authcache triggers a ttl
-        .containsEntry("authcache", singletonMap("ttl", "1"));
+      .containsEntry("gatewayplay", emptyMap())
+      .containsEntry("links", emptyMap())
+      // authcache triggers a ttl
+      .containsEntry("authcache", singletonMap("ttl", "1"));
   }
 
   @Test public void extract_decrementsTtlEvenWhenNotConfigured() {
@@ -125,11 +128,11 @@ public class SecondarySamplingTest {
     Extra extra = (Extra) extracted.extra().get(0);
 
     assertThat(extra.sampledKeys)
-        .containsExactly("authcache"); // not due to config, rather from TTL
+      .containsExactly("authcache"); // not due to config, rather from TTL
 
     assertThat(extra.samplingKeyToParameters)
-        .containsEntry("gatewayplay", emptyMap())
-        .containsEntry("authcache", singletonMap("ttl", "1")); // one less TTL
+      .containsEntry("gatewayplay", emptyMap())
+      .containsEntry("authcache", singletonMap("ttl", "1")); // one less TTL
   }
 
   @Test public void injectWritesNewLastParentWhenSampled() {
@@ -140,14 +143,14 @@ public class SecondarySamplingTest {
     extra.samplingKeyToParameters.put("authcache", twoEntryMap("ttl", "1", "spanId", notSpanId));
 
     TraceContext context = TraceContext.newBuilder()
-        .traceId(1L).spanId(2L).sampled(false).extra(singletonList(extra)).build();
+      .traceId(1L).spanId(2L).sampled(false).extra(singletonList(extra)).build();
     injector.inject(context, headers);
 
     // doesn't interfere with keys not sampled.
     assertThat(headers).containsEntry("sampling",
-        "gatewayplay;spanId=" + notSpanId + ","
-            + "links;spanId=" + context.spanIdString() + ","
-            + "authcache;ttl=1;spanId=" + notSpanId);
+      "gatewayplay;spanId=" + notSpanId + ","
+        + "links;spanId=" + context.spanIdString() + ","
+        + "authcache;ttl=1;spanId=" + notSpanId);
   }
 
   static <K, V> Map<K, V> twoEntryMap(K key1, V value1, K key2, V value2) {

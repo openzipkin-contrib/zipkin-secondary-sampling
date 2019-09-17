@@ -11,13 +11,16 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package brave.secondary_sampling;
+package brave.secondary_sampling.integration;
 
 import brave.Tracing;
 import brave.TracingCustomizer;
 import brave.propagation.B3SinglePropagation;
 import brave.propagation.Propagation;
+import brave.secondary_sampling.SecondarySampling;
+import brave.secondary_sampling.TestSecondarySamplingPolicy;
 import brave.secondary_sampling.TestSecondarySamplingPolicy.TestTrigger;
+import brave.secondary_sampling.TraceForwarder;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -35,40 +38,52 @@ import static org.assertj.core.api.Assertions.assertThat;
  * This is a <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">Secondary
  * Sampling</a> proof of concept.
  */
+// intentionally not in package brave.secondary_sampling to ensure we exposed what we need
 public class SecondarySamplingIntegratedTest {
   InMemoryStorage zipkin = InMemoryStorage.newBuilder().build();
   InMemoryStorage gatewayplay = InMemoryStorage.newBuilder().build();
   InMemoryStorage authcache = InMemoryStorage.newBuilder().build();
 
   Reporter<zipkin2.Span> traceForwarder = new TraceForwarder()
-      .configureSamplingKey("b3", zipkin.spanConsumer())
-      .configureSamplingKey("gatewayplay", gatewayplay.spanConsumer())
-      .configureSamplingKey("authcache", authcache.spanConsumer());
+    .configureSamplingKey("b3", zipkin.spanConsumer())
+    .configureSamplingKey("gatewayplay", gatewayplay.spanConsumer())
+    .configureSamplingKey("authcache", authcache.spanConsumer());
 
   Propagation.Factory b3 = B3SinglePropagation.FACTORY;
 
   TestSecondarySamplingPolicy gatewayplayPolicy = new TestSecondarySamplingPolicy()
-      .addTrigger("gatewayplay", "gateway", new TestTrigger().rps(50))
-      .addTrigger("gatewayplay", "playback", new TestTrigger());
+    .addTrigger("gatewayplay", "gateway", new TestTrigger().rps(50))
+    .addTrigger("gatewayplay", "playback", new TestTrigger());
 
   TestSecondarySamplingPolicy authcachePolicy = new TestSecondarySamplingPolicy()
-      .addTrigger("authcache", "auth", new TestTrigger().rps(100).ttl(1));
+    .addTrigger("authcache", "auth", new TestTrigger().rps(100).ttl(1));
 
   TestSecondarySamplingPolicy allPolicy = new TestSecondarySamplingPolicy()
-      .merge(gatewayplayPolicy)
-      .merge(authcachePolicy);
+    .merge(gatewayplayPolicy)
+    .merge(authcachePolicy);
 
   Function<String, TracingCustomizer> configureGatewayPlay = localServiceName -> builder -> {
-    new SecondarySampling(localServiceName, b3, gatewayplayPolicy).customize(builder);
+    SecondarySampling.newBuilder()
+      .localServiceName(localServiceName)
+      .propagationFactory(b3)
+      .policy(gatewayplayPolicy).build()
+      .customize(builder);
     builder.spanReporter(traceForwarder);
   };
-  Function<String, TracingCustomizer> configureAuthCache =
-      localServiceName -> builder -> {
-        new SecondarySampling(localServiceName, b3, authcachePolicy).customize(builder);
-        builder.spanReporter(traceForwarder);
-      };
+  Function<String, TracingCustomizer> configureAuthCache = localServiceName -> builder -> {
+    SecondarySampling.newBuilder()
+      .localServiceName(localServiceName)
+      .propagationFactory(b3)
+      .policy(authcachePolicy).build()
+      .customize(builder);
+    builder.spanReporter(traceForwarder);
+  };
   Function<String, TracingCustomizer> configureAllSampling = localServiceName -> builder -> {
-    new SecondarySampling(localServiceName, b3, allPolicy).customize(builder);
+    SecondarySampling.newBuilder()
+      .localServiceName(localServiceName)
+      .propagationFactory(b3)
+      .policy(allPolicy).build()
+      .customize(builder);
     builder.spanReporter(traceForwarder);
   };
 
@@ -118,7 +133,7 @@ public class SecondarySamplingIntegratedTest {
 
     // Does not accidentally call playback services
     assertThat(zipkin.getServiceNames().execute())
-        .containsExactly("api", "auth", "authdb", "cache", "gateway", "recodb", "recommendations");
+      .containsExactly("api", "auth", "authdb", "cache", "gateway", "recodb", "recommendations");
   }
 
   @Test public void baseCase_routingToPlayback() throws Exception { // sanity check
@@ -131,16 +146,16 @@ public class SecondarySamplingIntegratedTest {
 
     // Does not accidentally call recommendations services
     assertThat(zipkin.getServiceNames().execute()).containsExactly(
-        "api",
-        "auth",
-        "authdb",
-        "cache",
-        "gateway",
-        "license",
-        "licensedb",
-        "moviemetadata",
-        "playback",
-        "streams"
+      "api",
+      "auth",
+      "authdb",
+      "cache",
+      "gateway",
+      "license",
+      "licensedb",
+      "moviemetadata",
+      "playback",
+      "streams"
     );
   }
 
@@ -170,7 +185,7 @@ public class SecondarySamplingIntegratedTest {
 
     assertThat(zipkin.getDependencies()).isEmpty();
     assertThat(gatewayplay.getDependencies()).containsExactly(
-        DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
+      DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
     );
     assertThat(authcache.getDependencies()).isEmpty();
   }
@@ -187,7 +202,7 @@ public class SecondarySamplingIntegratedTest {
 
     assertThat(zipkin.getDependencies()).isNotEmpty();
     assertThat(gatewayplay.getDependencies()).containsExactly( // doesn't double-count!
-        DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
+      DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
     );
     assertThat(authcache.getDependencies()).isEmpty();
   }
@@ -205,7 +220,7 @@ public class SecondarySamplingIntegratedTest {
     assertThat(zipkin.getDependencies()).isEmpty();
     assertThat(gatewayplay.getDependencies()).isEmpty();
     assertThat(authcache.getDependencies()).containsExactly(
-        DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
+      DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
     );
   }
 
@@ -222,7 +237,7 @@ public class SecondarySamplingIntegratedTest {
     assertThat(zipkin.getDependencies()).isNotEmpty();
     assertThat(gatewayplay.getDependencies()).isEmpty();
     assertThat(authcache.getDependencies()).containsExactly( // doesn't double-count!
-        DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
+      DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
     );
   }
 
@@ -238,10 +253,10 @@ public class SecondarySamplingIntegratedTest {
 
     assertThat(zipkin.getDependencies()).isEmpty();
     assertThat(gatewayplay.getDependencies()).containsExactly(
-        DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
+      DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
     );
     assertThat(authcache.getDependencies()).containsExactly(
-        DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
+      DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
     );
   }
 
@@ -257,19 +272,19 @@ public class SecondarySamplingIntegratedTest {
 
     assertThat(zipkin.getDependencies()).isNotEmpty();
     assertThat(gatewayplay.getDependencies()).containsExactly( // doesn't double-count!
-        DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
+      DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
     );
     assertThat(authcache.getDependencies()).containsExactly( // doesn't double-count!
-        DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
+      DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
     );
   }
 
   Function<String, Tracing> tracingFunction(Function<String, TracingCustomizer> customizer) {
     return (localServiceName) -> {
       Tracing.Builder result = Tracing.newBuilder()
-          .localServiceName(localServiceName)
-          .propagationFactory(B3SinglePropagation.FACTORY)
-          .spanReporter(s -> zipkin.accept(asList(s)).enqueue(NOOP_CALLBACK));
+        .localServiceName(localServiceName)
+        .propagationFactory(B3SinglePropagation.FACTORY)
+        .spanReporter(s -> zipkin.accept(asList(s)).enqueue(NOOP_CALLBACK));
       customizer.apply(localServiceName).customize(result);
       return result.build();
     };
