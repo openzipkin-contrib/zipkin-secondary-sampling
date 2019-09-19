@@ -30,14 +30,12 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
   final Extractor<C> delegate;
   final Getter<C, K> getter;
   final SecondarySamplingPolicy policy;
-  final String localServiceName;
   final K samplingKey;
 
   SecondarySamplingExtractor(SecondarySampling.Propagation<K> propagation, Getter<C, K> getter) {
     this.delegate = propagation.delegate.extractor(getter);
     this.getter = getter;
     this.policy = propagation.secondarySampling.policy;
-    this.localServiceName = propagation.secondarySampling.localServiceName;
     this.samplingKey = propagation.samplingKey;
   }
 
@@ -56,7 +54,7 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
       Map<String, String> parameters = nameParameters.length > 1
         ? parseParameters(nameParameters)
         : new LinkedHashMap<>();
-      if (updateparametersAndSample(samplingKey, parameters)) {
+      if (updateParametersAndSample(samplingKey, parameters)) {
         extra.sampledKeys.add(samplingKey);
         builder.sampledLocal(); // this means data will be recorded
       }
@@ -66,7 +64,7 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
     return builder.build();
   }
 
-  boolean updateparametersAndSample(String samplingKey, Map<String, String> parameters) {
+  boolean updateParametersAndSample(String samplingKey, Map<String, String> parameters) {
     boolean sampled = false;
 
     // decrement ttl from upstream, if there is one
@@ -77,7 +75,7 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
     }
 
     // Lookup if our node should participate in this sampling policy
-    Trigger trigger = policy.getTriggerForService(samplingKey, localServiceName);
+    Trigger trigger = policy.getTrigger(samplingKey);
     if (trigger != null) {
       // make a new sampling decision
       sampled = trigger.isSampled();

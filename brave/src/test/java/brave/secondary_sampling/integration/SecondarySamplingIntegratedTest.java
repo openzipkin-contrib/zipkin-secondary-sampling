@@ -64,25 +64,22 @@ public class SecondarySamplingIntegratedTest {
 
   Function<String, TracingCustomizer> configureGatewayPlay = localServiceName -> builder -> {
     SecondarySampling.newBuilder()
-      .localServiceName(localServiceName)
       .propagationFactory(b3)
-      .policy(gatewayplayPolicy).build()
+      .policy(gatewayplayPolicy.forService(localServiceName)).build()
       .customize(builder);
     builder.spanReporter(traceForwarder);
   };
   Function<String, TracingCustomizer> configureAuthCache = localServiceName -> builder -> {
     SecondarySampling.newBuilder()
-      .localServiceName(localServiceName)
       .propagationFactory(b3)
-      .policy(authcachePolicy).build()
+      .policy(authcachePolicy.forService(localServiceName)).build()
       .customize(builder);
     builder.spanReporter(traceForwarder);
   };
   Function<String, TracingCustomizer> configureAllSampling = localServiceName -> builder -> {
     SecondarySampling.newBuilder()
-      .localServiceName(localServiceName)
       .propagationFactory(b3)
-      .policy(allPolicy).build()
+      .policy(allPolicy.forService(localServiceName)).build()
       .customize(builder);
     builder.spanReporter(traceForwarder);
   };

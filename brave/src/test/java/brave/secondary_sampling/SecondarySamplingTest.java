@@ -39,9 +39,8 @@ public class SecondarySamplingTest {
   String serviceName = "auth", notServiceName = "gateway", notSpanId = "19f84f102048e047";
   TestSecondarySamplingPolicy policy = new TestSecondarySamplingPolicy();
   SecondarySampling secondarySampling = SecondarySampling.newBuilder()
-    .localServiceName(serviceName)
     .propagationFactory(B3SinglePropagation.FACTORY)
-    .policy(policy)
+    .policy(policy.forService(serviceName))
     .build();
 
   Propagation<String> propagation = secondarySampling.create(STRING);

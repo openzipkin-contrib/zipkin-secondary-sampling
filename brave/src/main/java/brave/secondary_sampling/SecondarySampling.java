@@ -35,7 +35,7 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
   }
 
   public static final class Builder {
-    String fieldName = "sampling", tagName = "sampled_keys", localServiceName;
+    String fieldName = "sampling", tagName = "sampled_keys";
     Propagation.Factory propagationFactory;
     SecondarySamplingPolicy policy;
 
@@ -48,16 +48,6 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
     /** The ascii lowercase tag name to use. Defaults to {@code sampled_keys}. */
     public Builder tagName(String tagName) {
       this.tagName = validateAndLowercase(tagName, "tag");
-      return this;
-    }
-
-    /**
-     * Use the same value normally passed to {@link Tracing.Builder#localServiceName(String)}
-     *
-     * <p>This is used for {@link SecondarySamplingPolicy#getTriggerForService(String, String)}
-     */
-    public Builder localServiceName(String localServiceName) {
-      this.localServiceName = validateAndLowercase(localServiceName, "service");
       return this;
     }
 
@@ -82,7 +72,6 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
     }
 
     public SecondarySampling build() {
-      if (localServiceName == null) throw new NullPointerException("localServiceName == null");
       if (propagationFactory == null) throw new NullPointerException("propagationFactory == null");
       if (policy == null) throw new NullPointerException("policy == null");
       return new SecondarySampling(this);
@@ -92,14 +81,13 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
     }
   }
 
-  final String fieldName, tagName, localServiceName;
+  final String fieldName, tagName;
   final Propagation.Factory delegate;
   final SecondarySamplingPolicy policy;
 
   SecondarySampling(Builder builder) {
     this.fieldName = builder.fieldName;
     this.tagName = builder.tagName;
-    this.localServiceName = builder.localServiceName;
     this.delegate = builder.propagationFactory;
     this.policy = builder.policy;
   }
