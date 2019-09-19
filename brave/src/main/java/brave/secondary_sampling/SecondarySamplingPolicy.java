@@ -23,5 +23,12 @@ public interface SecondarySamplingPolicy {
     int ttl();
   }
 
-  @Nullable Trigger getTriggerForService(String samplingKey, String serviceName);
+  /**
+   * Returns a trigger if this tracer should participate with the given {@code samplingKey}.
+   *
+   * @param samplingKey sampling key extracted from a remote request.
+   * @return a trigger if participating with this sampling key, or null to pass through data
+   * associated with it.
+   */
+  @Nullable Trigger getTrigger(String samplingKey);
 }

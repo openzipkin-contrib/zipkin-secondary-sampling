@@ -13,14 +13,14 @@
  */
 package brave.secondary_sampling;
 
-import brave.internal.Nullable;
 import brave.sampler.RateLimitingSampler;
 import brave.sampler.Sampler;
+import brave.secondary_sampling.SecondarySamplingPolicy.Trigger;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public final class TestSecondarySamplingPolicy implements SecondarySamplingPolicy {
-  public static final class TestTrigger implements SecondarySamplingPolicy.Trigger {
+public final class TestSecondarySamplingPolicy {
+  public static final class TestTrigger implements Trigger {
     Sampler sampler = Sampler.ALWAYS_SAMPLE;
     int ttl = 0; // zero means don't add ttl
 
@@ -52,6 +52,13 @@ public final class TestSecondarySamplingPolicy implements SecondarySamplingPolic
     return this;
   }
 
+  public SecondarySamplingPolicy forService(String serviceName) {
+    return samplingKey -> {
+      Trigger result = getByService(samplingKey).get(serviceName);
+      return result != null ? result : allServices.get(samplingKey);
+    };
+  }
+
   public TestSecondarySamplingPolicy addTrigger(String samplingKey, String serviceName,
     Trigger trigger) {
     getByService(samplingKey).put(serviceName, trigger);
@@ -68,11 +75,6 @@ public final class TestSecondarySamplingPolicy implements SecondarySamplingPolic
     allServices.putAll(input.allServices);
     byService.putAll(input.byService);
     return this;
-  }
-
-  @Override @Nullable public Trigger getTriggerForService(String samplingKey, String serviceName) {
-    Trigger result = getByService(samplingKey).get(serviceName);
-    return result != null ? result : allServices.get(samplingKey);
   }
 
   Map<String, Trigger> getByService(String samplingKey) {
