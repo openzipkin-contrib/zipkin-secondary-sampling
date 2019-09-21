@@ -18,8 +18,8 @@ import brave.TracingCustomizer;
 import brave.propagation.B3SinglePropagation;
 import brave.propagation.Propagation;
 import brave.secondary_sampling.SecondarySampling;
-import brave.secondary_sampling.TestSecondarySamplingPolicy;
-import brave.secondary_sampling.TestSecondarySamplingPolicy.TestTrigger;
+import brave.secondary_sampling.TestSecondarySampler;
+import brave.secondary_sampling.TestSecondarySampler.Trigger;
 import brave.secondary_sampling.TraceForwarder;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -51,35 +51,35 @@ public class SecondarySamplingIntegratedTest {
 
   Propagation.Factory b3 = B3SinglePropagation.FACTORY;
 
-  TestSecondarySamplingPolicy gatewayplayPolicy = new TestSecondarySamplingPolicy()
-    .addTrigger("gatewayplay", "gateway", new TestTrigger().rps(50))
-    .addTrigger("gatewayplay", "playback", new TestTrigger());
+  TestSecondarySampler gatewayplayPolicy = new TestSecondarySampler()
+    .addTrigger("gatewayplay", "gateway", new Trigger().rps(50))
+    .addTrigger("gatewayplay", "playback", new Trigger());
 
-  TestSecondarySamplingPolicy authcachePolicy = new TestSecondarySamplingPolicy()
-    .addTrigger("authcache", "auth", new TestTrigger().rps(100).ttl(1));
+  TestSecondarySampler authcachePolicy = new TestSecondarySampler()
+    .addTrigger("authcache", "auth", new Trigger().rps(100).ttl(1));
 
-  TestSecondarySamplingPolicy allPolicy = new TestSecondarySamplingPolicy()
+  TestSecondarySampler allPolicy = new TestSecondarySampler()
     .merge(gatewayplayPolicy)
     .merge(authcachePolicy);
 
   Function<String, TracingCustomizer> configureGatewayPlay = localServiceName -> builder -> {
     SecondarySampling.newBuilder()
       .propagationFactory(b3)
-      .policy(gatewayplayPolicy.forService(localServiceName)).build()
+      .sampler(gatewayplayPolicy.forService(localServiceName)).build()
       .customize(builder);
     builder.spanReporter(traceForwarder);
   };
   Function<String, TracingCustomizer> configureAuthCache = localServiceName -> builder -> {
     SecondarySampling.newBuilder()
       .propagationFactory(b3)
-      .policy(authcachePolicy.forService(localServiceName)).build()
+      .sampler(authcachePolicy.forService(localServiceName)).build()
       .customize(builder);
     builder.spanReporter(traceForwarder);
   };
   Function<String, TracingCustomizer> configureAllSampling = localServiceName -> builder -> {
     SecondarySampling.newBuilder()
       .propagationFactory(b3)
-      .policy(allPolicy.forService(localServiceName)).build()
+      .sampler(allPolicy.forService(localServiceName)).build()
       .customize(builder);
     builder.spanReporter(traceForwarder);
   };

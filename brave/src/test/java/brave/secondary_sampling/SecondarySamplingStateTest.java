@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.entry;
  * This is a <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">Secondary
  * Sampling</a> proof of concept.
  */
-public class SecondarySamplingTest {
+public class SecondarySamplingStateTest {
   String serviceName = "auth", notServiceName = "gateway", notSpanId = "19f84f102048e047";
   TestSecondarySampler policy = new TestSecondarySampler();
   SecondarySampling secondarySampling = SecondarySampling.newBuilder()
@@ -71,9 +71,8 @@ public class SecondarySamplingTest {
 
     TraceContextOrSamplingFlags extracted = extractor.extract(headers);
 
-    Map<SecondarySamplingState, Boolean> stateToSampled =
-      ((Extra) extracted.extra().get(0)).toMap();
-    assertThat(stateToSampled)
+    Map<SecondarySamplingState, Boolean> keyToState = ((Extra) extracted.extra().get(0)).toMap();
+    assertThat(keyToState)
       // no TTL left for the next hop
       .containsEntry(SecondarySamplingState.newBuilder("authcache").build(), true)
       // not sampled because there's no trigger for links
@@ -109,14 +108,12 @@ public class SecondarySamplingTest {
 
     TraceContextOrSamplingFlags extracted = extractor.extract(headers);
 
-    Map<SecondarySamplingState, Boolean> stateToSampled =
-      ((Extra) extracted.extra().get(0)).toMap();
-    assertThat(stateToSampled).containsOnly(
+    Map<SecondarySamplingState, Boolean> keyToState = ((Extra) extracted.extra().get(0)).toMap();
+    assertThat(keyToState).containsOnly(
       entry(SecondarySamplingState.newBuilder("links").build(), true),
       // authcache triggers a ttl
       entry(SecondarySamplingState.newBuilder("authcache")
-        .parameter("ttl", "1")
-        .build(), true),
+        .parameter("ttl", "1").build(), true),
       // not sampled as we aren't in that service
       entry(SecondarySamplingState.newBuilder("gatewayplay").build(), false)
     );
@@ -129,13 +126,11 @@ public class SecondarySamplingTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(headers);
     Extra extra = (Extra) extracted.extra().get(0);
 
-    Map<SecondarySamplingState, Boolean> stateToSampled =
-      ((Extra) extracted.extra().get(0)).toMap();
-    assertThat(stateToSampled)
+    Map<SecondarySamplingState, Boolean> keyToState = ((Extra) extracted.extra().get(0)).toMap();
+    assertThat(keyToState)
       // not sampled due to config, rather from TTL: note it is decremented
       .containsEntry(SecondarySamplingState.newBuilder("authcache")
-        .parameter("ttl", "1")
-        .build(), true)
+        .parameter("ttl", "1").build(), true)
       // not sampled as we aren't in that service
       .containsEntry(SecondarySamplingState.newBuilder("gatewayplay").build(), false);
   }

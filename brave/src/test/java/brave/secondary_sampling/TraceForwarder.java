@@ -15,12 +15,13 @@ package brave.secondary_sampling;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.jetbrains.annotations.Nullable;
 import zipkin2.Callback;
 import zipkin2.Span;
 import zipkin2.reporter.Reporter;
 import zipkin2.storage.SpanConsumer;
 
-import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 
 /**
  * This is a simulation of <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md#the-trace-forwarder">Trace
@@ -66,17 +67,15 @@ public final class TraceForwarder implements Reporter<Span> {
     for (String entry : sampledKeys.split(",", 100)) {
       String[] nameMetadata = entry.split(";", 100);
       String sampledKey = nameMetadata[0];
+      String parentId = findParentId(nameMetadata);
 
       if (!samplingKeyToSpanConsumer.containsKey(sampledKey)) continue; // skip when unconfigured
-
-      Map<String, String> parameters = SecondarySampling.parseParameters(nameMetadata);
 
       // retain tags unrelated to secondary sampling
       Span.Builder builder = span.toBuilder().clearTags();
       tags.forEach(builder::putTag);
 
       // Relink the trace to last upstream, saving the real parent ID off as a tag.
-      String parentId = parameters.get("parentId");
       if (parentId != null) {
         builder.parentId(parentId);
         builder.putTag("linkedParentId", span.parentId());
@@ -84,7 +83,21 @@ public final class TraceForwarder implements Reporter<Span> {
       }
 
       Span scoped = builder.build();
-      samplingKeyToSpanConsumer.get(sampledKey).accept(asList(scoped)).enqueue(NOOP_CALLBACK);
+      samplingKeyToSpanConsumer.get(sampledKey)
+        .accept(singletonList(scoped))
+        .enqueue(NOOP_CALLBACK);
     }
+  }
+
+  @Nullable static String findParentId(String[] nameMetadata) {
+    String parentId = null;
+    for (int i = 1; i < nameMetadata.length; i++) {
+      String[] nameValue = nameMetadata[i].split("=", 2);
+      if (nameValue[0].equals("parentId")) {
+        parentId = nameValue[1];
+        break;
+      }
+    }
+    return parentId;
   }
 }

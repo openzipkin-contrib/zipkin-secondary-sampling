@@ -15,21 +15,21 @@ package brave.secondary_sampling;
 
 import brave.Tracing;
 import brave.TracingCustomizer;
+import brave.internal.MapPropagationFields;
+import brave.internal.PropagationFieldsFactory;
 import brave.propagation.Propagation;
 import brave.propagation.Propagation.KeyFactory;
 import brave.propagation.TraceContext;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * This is a <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">Secondary
  * Sampling</a> proof of concept.
  */
 public final class SecondarySampling extends Propagation.Factory implements TracingCustomizer {
+  static final ExtraFactory EXTRA_FACTORY = new ExtraFactory();
+
   public static Builder newBuilder() {
     return new Builder();
   }
@@ -37,7 +37,7 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
   public static final class Builder {
     String fieldName = "sampling", tagName = "sampled_keys";
     Propagation.Factory propagationFactory;
-    SecondarySamplingPolicy policy;
+    SecondarySampler sampler;
 
     /** The ascii lowercase propagation field name to use. Defaults to {@code sampling}. */
     public Builder fieldName(String fieldName) {
@@ -62,18 +62,15 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
       return this;
     }
 
-    /**
-     * Populate this with the same data passed to {@link Tracing.Builder#propagationFactory(brave.propagation.Propagation.Factory)}
-     */
-    public Builder policy(SecondarySamplingPolicy policy) {
-      if (policy == null) throw new NullPointerException("policy == null");
-      this.policy = policy;
+    public Builder sampler(SecondarySampler sampler) {
+      if (sampler == null) throw new NullPointerException("sampler == null");
+      this.sampler = sampler;
       return this;
     }
 
     public SecondarySampling build() {
       if (propagationFactory == null) throw new NullPointerException("propagationFactory == null");
-      if (policy == null) throw new NullPointerException("policy == null");
+      if (sampler == null) throw new NullPointerException("policy == null");
       return new SecondarySampling(this);
     }
 
@@ -83,13 +80,13 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
 
   final String fieldName, tagName;
   final Propagation.Factory delegate;
-  final SecondarySamplingPolicy policy;
+  final SecondarySampler sampler;
 
   SecondarySampling(Builder builder) {
     this.fieldName = builder.fieldName;
     this.tagName = builder.tagName;
     this.delegate = builder.propagationFactory;
-    this.policy = builder.policy;
+    this.sampler = builder.sampler;
   }
 
   @Override public boolean supportsJoin() {
@@ -106,7 +103,8 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
   }
 
   @Override public TraceContext decorate(TraceContext context) {
-    return delegate.decorate(context);
+    TraceContext result = delegate.decorate(context);
+    return EXTRA_FACTORY.decorate(result);
   }
 
   @Override public void customize(Tracing.Builder builder) {
@@ -115,10 +113,28 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
       .alwaysReportSpans();
   }
 
-  /** This state is added to every span. A real implementation would be memory conscious. */
-  static final class Extra {
-    final Map<String, Map<String, String>> samplingKeyToParameters = new LinkedHashMap<>();
-    final Set<String> sampledKeys = new LinkedHashSet<>();
+  static final class ExtraFactory
+    extends PropagationFieldsFactory<SecondarySamplingState, Boolean, Extra> {
+    @Override public Class<Extra> type() {
+      return Extra.class;
+    }
+
+    @Override protected Extra create() {
+      return new Extra();
+    }
+
+    @Override protected Extra create(Extra parent) {
+      return new Extra(parent);
+    }
+  }
+
+  static final class Extra extends MapPropagationFields<SecondarySamplingState, Boolean> {
+    Extra() {
+    }
+
+    Extra(Extra parent) {
+      super(parent);
+    }
   }
 
   static class Propagation<K> implements brave.propagation.Propagation<K> {
@@ -146,16 +162,6 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
       if (getter == null) throw new NullPointerException("getter == null");
       return new SecondarySamplingExtractor<>(this, getter);
     }
-  }
-
-  /** Like Accept header, except that we are ignoring the name and only returning parameters. */
-  static Map<String, String> parseParameters(String[] nameParameters) {
-    Map<String, String> result = new LinkedHashMap<>();
-    for (int i = 1; i < nameParameters.length; i++) {
-      String[] nameValue = nameParameters[i].split("=", 2);
-      result.put(nameValue[0], nameValue[1]);
-    }
-    return result;
   }
 
   static String validateAndLowercase(String name, String title) {
