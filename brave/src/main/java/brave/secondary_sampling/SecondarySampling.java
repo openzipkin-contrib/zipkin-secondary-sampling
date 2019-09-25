@@ -70,7 +70,7 @@ public final class SecondarySampling extends Propagation.Factory implements Trac
 
     public SecondarySampling build() {
       if (propagationFactory == null) throw new NullPointerException("propagationFactory == null");
-      if (sampler == null) throw new NullPointerException("policy == null");
+      if (sampler == null) throw new NullPointerException("sampler == null");
       return new SecondarySampling(this);
     }
 

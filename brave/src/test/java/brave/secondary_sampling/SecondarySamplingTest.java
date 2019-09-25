@@ -36,10 +36,10 @@ import static org.assertj.core.api.Assertions.entry;
  */
 public class SecondarySamplingTest {
   String serviceName = "auth", notServiceName = "gateway", notSpanId = "19f84f102048e047";
-  TestSecondarySampler policy = new TestSecondarySampler();
+  TestSecondarySampler sampler = new TestSecondarySampler();
   SecondarySampling secondarySampling = SecondarySampling.newBuilder()
     .propagationFactory(B3SinglePropagation.FACTORY)
-    .sampler(policy.forService(serviceName))
+    .sampler(sampler.forService(serviceName))
     .build();
 
   Propagation<String> propagation = secondarySampling.create(STRING);
@@ -51,7 +51,7 @@ public class SecondarySamplingTest {
 
   @Test public void extract_samplesLocalWhenConfigured() {
     // base case: links is configured, authcache is not. authcache is in the headers, though!
-    policy.addTrigger("links", new Trigger());
+    sampler.addTrigger("links", new Trigger());
 
     headers.put("b3", "0");
     headers.put("sampling", "authcache"); // sampling hint should not trigger
@@ -64,8 +64,8 @@ public class SecondarySamplingTest {
     assertThat(extractor.extract(headers).sampledLocal()).isTrue();
   }
 
-  /** This shows that TTL is applied regardless of policy */
-  @Test public void extract_ttlOverridesPolicy() {
+  /** This shows that TTL is applied regardless of sampler */
+  @Test public void extract_ttlOverridesSampler() {
     headers.put("b3", "0");
     headers.put("sampling", "links,authcache;ttl=1");
 
@@ -83,7 +83,7 @@ public class SecondarySamplingTest {
   /** This shows an example of dynamic configuration */
   @Test public void dynamicConfiguration() {
     // base case: links is configured, authcache is not. authcache is in the headers, though!
-    policy.addTrigger("links", new Trigger());
+    sampler.addTrigger("links", new Trigger());
 
     headers.put("b3", "0");
     headers.put("sampling", "links,authcache");
@@ -91,18 +91,18 @@ public class SecondarySamplingTest {
     assertThat(extractor.extract(headers).sampledLocal()).isTrue();
 
     // dynamic configuration removes link processing
-    policy.removeTriggers("links");
+    sampler.removeTriggers("links");
     assertThat(extractor.extract(headers).sampledLocal()).isFalse();
 
     // dynamic configuration adds authcache processing
-    policy.addTrigger("authcache", serviceName, new Trigger());
+    sampler.addTrigger("authcache", serviceName, new Trigger());
     assertThat(extractor.extract(headers).sampledLocal()).isTrue();
   }
 
   @Test public void extract_convertsConfiguredRpsToDecision() {
-    policy.addTrigger("gatewayplay", notServiceName, new Trigger().rps(50));
-    policy.addTrigger("links", new Trigger());
-    policy.addTrigger("authcache", new Trigger().rps(100).ttl(1));
+    sampler.addTrigger("gatewayplay", notServiceName, new Trigger().rps(50));
+    sampler.addTrigger("links", new Trigger());
+    sampler.addTrigger("authcache", new Trigger().rps(100).ttl(1));
 
     headers.put("b3", "0");
     headers.put("sampling", "gatewayplay,links,authcache");

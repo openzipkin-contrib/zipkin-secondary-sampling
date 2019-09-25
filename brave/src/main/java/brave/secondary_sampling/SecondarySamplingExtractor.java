@@ -21,7 +21,7 @@ import static brave.secondary_sampling.SecondarySampling.EXTRA_FACTORY;
 
 /**
  * This extracts the {@link SecondarySampling#fieldName sampling header}, and performs any TTL or
- * triggering logic based on the policy configured for this service.
+ * triggering logic based on the sampler configured for this service.
  */
 final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
   final Extractor<C> delegate;

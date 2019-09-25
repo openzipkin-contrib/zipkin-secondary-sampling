@@ -51,35 +51,35 @@ public class SecondarySamplingIntegratedTest {
 
   Propagation.Factory b3 = B3SinglePropagation.FACTORY;
 
-  TestSecondarySampler gatewayplayPolicy = new TestSecondarySampler()
+  TestSecondarySampler gatewayplaySampler = new TestSecondarySampler()
     .addTrigger("gatewayplay", "gateway", new Trigger().rps(50))
     .addTrigger("gatewayplay", "playback", new Trigger());
 
-  TestSecondarySampler authcachePolicy = new TestSecondarySampler()
+  TestSecondarySampler authcacheSampler = new TestSecondarySampler()
     .addTrigger("authcache", "auth", new Trigger().rps(100).ttl(1));
 
-  TestSecondarySampler allPolicy = new TestSecondarySampler()
-    .merge(gatewayplayPolicy)
-    .merge(authcachePolicy);
+  TestSecondarySampler allSampler = new TestSecondarySampler()
+    .merge(gatewayplaySampler)
+    .merge(authcacheSampler);
 
   Function<String, TracingCustomizer> configureGatewayPlay = localServiceName -> builder -> {
     SecondarySampling.newBuilder()
       .propagationFactory(b3)
-      .sampler(gatewayplayPolicy.forService(localServiceName)).build()
+      .sampler(gatewayplaySampler.forService(localServiceName)).build()
       .customize(builder);
     builder.spanReporter(traceForwarder);
   };
   Function<String, TracingCustomizer> configureAuthCache = localServiceName -> builder -> {
     SecondarySampling.newBuilder()
       .propagationFactory(b3)
-      .sampler(authcachePolicy.forService(localServiceName)).build()
+      .sampler(authcacheSampler.forService(localServiceName)).build()
       .customize(builder);
     builder.spanReporter(traceForwarder);
   };
   Function<String, TracingCustomizer> configureAllSampling = localServiceName -> builder -> {
     SecondarySampling.newBuilder()
       .propagationFactory(b3)
-      .sampler(allPolicy.forService(localServiceName)).build()
+      .sampler(allSampler.forService(localServiceName)).build()
       .customize(builder);
     builder.spanReporter(traceForwarder);
   };
