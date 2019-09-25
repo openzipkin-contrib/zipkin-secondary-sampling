@@ -90,14 +90,12 @@ public final class TraceForwarder implements Reporter<Span> {
   }
 
   @Nullable static String findParentId(String[] nameMetadata) {
-    String parentId = null;
     for (int i = 1; i < nameMetadata.length; i++) {
       String[] nameValue = nameMetadata[i].split("=", 2);
       if (nameValue[0].equals("parentId")) {
-        parentId = nameValue[1];
-        break;
+        return nameValue[1];
       }
     }
-    return parentId;
+    return null;
   }
 }

@@ -20,8 +20,9 @@ import brave.propagation.TraceContextOrSamplingFlags;
 import static brave.secondary_sampling.SecondarySampling.EXTRA_FACTORY;
 
 /**
- * This extracts the {@link SecondarySampling#fieldName sampling header}, and performs any TTL or
- * triggering logic based on the sampler configured for this service.
+ * This extracts the {@link SecondarySampling#fieldName sampling header}, and parses it a list of
+ * {@link SecondarySamplingState}. For each extracted sampling key, TTL and sampling takes place if
+ * configured.
  */
 final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
   final Extractor<C> delegate;
