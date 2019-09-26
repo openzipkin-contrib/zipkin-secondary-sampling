@@ -13,17 +13,26 @@
  */
 package brave.secondary_sampling;
 
+import brave.http.HttpSampler;
 import brave.http.HttpServerRequest;
 import brave.propagation.TraceContext;
 
-public interface SecondarySampler {
+/**
+ * Secondary sampling is different than typical {@link brave.sampler.Sampler trace-scoped sampling},
+ * as it has is re-evaluated at each node as opposed to assumed from constant values, like {@code
+ * X-B3-Sampled: 1}.
+ *
+ * <p>Please read the <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">design
+ * doc</a> for more concepts.
+ *
+ * <p><h3>Implementation notes</h3>
+ * This is invoked during {@link TraceContext.Extractor#extract(Object)}, for each sampling key
+ * parsed. Unlike {@link HttpSampler}, it is possible that the request is not HTTP, hence the type
+ * is {@code Object}. For example, it could be a different RPC request, or a messaging type.
+ */
+public abstract class SecondarySampler { // class to permit late adding methods for Java 1.6
   /**
-   * Returns a trigger function that decides if this request is sampled for the given {@code
-   * samplingKey}.
-   *
-   * <p>This is invoked during {@link TraceContext.Extractor#extract(Object)}. It is usually the
-   * case that the carrier parameter is a request. For example, in http middleware, it will be
-   * {@link HttpServerRequest}. However, in other RPC middleware it may be a different type.
+   * Returns a true if this request is sampled for a secondary sampling key {@code samplingKey}.
    *
    * <p>For example, to only handle http requests, implement like so:
    * <pre>{@code
@@ -32,14 +41,15 @@ public interface SecondarySampler {
    *     return isSampled(request, builder.samplingKey());
    * }</pre>
    *
-   * <p><h3>Mutating the builder</h3>
-   * A side-effect of a sampling decision could be adding parameters or refreshing a {@link
+   * <p><h3>The builder argument</h3>
+   * Simple use cases will only read {@link SecondarySamplingState.Builder#samplingKey()}. This
+   * argument is present to allow reading other parameters or refreshing a {@link
    * SecondarySamplingState.Builder#ttl(int)}.
    *
-   * @param request the incoming request type, such as {@link HttpServerRequest}
+   * @param request the incoming request type, possibly {@link HttpServerRequest}
    * @param builder state extracted for this sampling key.
    * @return true if the {@link SecondarySamplingState.Builder#samplingKey()} is sampled for this
    * request
    */
-  boolean isSampled(Object request, SecondarySamplingState.Builder builder);
+  public abstract boolean isSampled(Object request, SecondarySamplingState.Builder builder);
 }
