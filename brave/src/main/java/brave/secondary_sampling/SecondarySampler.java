@@ -18,9 +18,28 @@ import brave.http.HttpServerRequest;
 import brave.propagation.TraceContext;
 
 /**
- * Secondary sampling is different than typical {@link brave.sampler.Sampler trace-scoped sampling},
- * as it has is re-evaluated at each node as opposed to assumed from constant values, like {@code
- * X-B3-Sampled: 1}.
+ * Decides whether the {@link TraceContext#isLocalRoot() local root} of this request will be sampled
+ * for the given sampling key.
+ *
+ * <p><h3>Details</h3>
+ * To review, a {@link TraceContext#isLocalRoot() local root} is the partition of a trace that
+ * starts and ends in one tracer. An HTTP example of a local root is a single incoming request and
+ * the tree of spans up to egress requests. By definition, a local root does not include the next
+ * hop.
+ *
+ * <p>{@link brave.sampler.Sampler trace-scoped sampling}, a decision is made for the entire
+ * root of the trace, so that decision is constant for each {@link TraceContext#isLocalRoot() local
+ * root}, including all spans of the request: they are either all sampled or all not sampled.
+ *
+ * <p>Secondary sampling is mainly different as it is evaluated at each node, each {@link
+ * TraceContext#isLocalRoot() local root}. It is also different as multiple participants, identified
+ * by sampling keys, may want the same data.
+ *
+ * <p>Unlike {@code X-B3-Sampled}, a "sampling key" does not tell you anything about upstream. It
+ * does not mean anything participated yet. This function is not trace-scoped in other words, it is
+ * only about the local root of this request. The decision made here is if this request is sampled
+ * against the "sampling key". To participate in the key would be to return true from this function,
+ * to abstain would be to return false.
  *
  * <p>Please read the <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">design
  * doc</a> for more concepts.
@@ -30,9 +49,12 @@ import brave.propagation.TraceContext;
  * parsed. Unlike {@link HttpSampler}, it is possible that the request is not HTTP, hence the type
  * is {@code Object}. For example, it could be a different RPC request, or a messaging type.
  */
-public abstract class SecondarySampler { // class to permit late adding methods for Java 1.6
+// Unlike brave.http.HttpSampler, there are generic types, so no problems implementing with lambdas where Java 1.8+ is available
+public interface SecondarySampler {
   /**
-   * Returns a true if this request is sampled for a secondary sampling key {@code samplingKey}.
+   * Returning true will sample data for the {@link TraceContext#isLocalRoot() local root} of this
+   * request, under the the given {@link SecondarySamplingState.Builder#samplingKey()}. Returning
+   * false ignores the sampling key.
    *
    * <p>For example, to only handle http requests, implement like so:
    * <pre>{@code
@@ -51,5 +73,5 @@ public abstract class SecondarySampler { // class to permit late adding methods 
    * @return true if the {@link SecondarySamplingState.Builder#samplingKey()} is sampled for this
    * request
    */
-  public abstract boolean isSampled(Object request, SecondarySamplingState.Builder builder);
+  boolean isSampled(Object request, SecondarySamplingState.Builder builder);
 }
