@@ -64,7 +64,7 @@ public final class MutableSecondarySamplingState {
   }
 
   /** Retrieves the current TTL of this {@link #samplingKey()} or zero if there is none. */
-  @Nullable public int ttl() {
+  public int ttl() {
     String ttl = parameter("ttl");
     return ttl == null ? 0 : Integer.parseInt(ttl);
   }

@@ -69,6 +69,6 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
       ttlSampled = true;
     }
 
-    return ttlSampled | sampler.isSampled(state);
+    return ttlSampled || sampler.isSampled(state);
   }
 }

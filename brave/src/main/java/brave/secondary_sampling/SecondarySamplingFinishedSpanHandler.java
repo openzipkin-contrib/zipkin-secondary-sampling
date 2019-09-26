@@ -49,7 +49,7 @@ final class SecondarySamplingFinishedSpanHandler extends brave.handler.FinishedS
 
       extra.forEach((state, sampled) -> {
         if (!sampled) return;
-        String upstreamSpanId = state.parameter("spanId");
+        String upstreamSpanId = state.parameter("lastSpanId");
         if (parentId != null && !parentId.equals(upstreamSpanId)) {
           joiner.add(state.samplingKey() + ";parentId=" + upstreamSpanId);
         } else {

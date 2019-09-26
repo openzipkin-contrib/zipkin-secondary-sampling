@@ -46,6 +46,9 @@ sampling: authcache;ttl=1
 
 The naming convention `sampling` follows the same design concern as [b3 single](https://github.com/openzipkin/b3-propagation/blob/master/RATIONALE.md#relationship-to-jms-java-message-service). Basically, hyphens cause problems across messaging links. By avoiding them, we allow the same system to work with message traces as opposed to just RPC ones, and with no conversion concerns.  This encoding is the similar to the [Accept header](https://tools.ietf.org/html/rfc7231#section-5.3.2) in order to provide familiarity.
 
+### `lastSpanId` parameter
+The `lastSpanId` parameter should be added to a sampling key when only a subset of the service graph is triggered. This allows features like rate-limiting to be applied consistently. It also allows intentional gaps between triggers to be repaired later. Details about the `lastSpanId` are discussed later in this document. 
+
 ## Non-interference
 The application is unaware secondary sampling. It is critical that this design and tooling in no way change the api surface to instrumentation libraries, such as what's used by frameworks like Spring Boot. This reduces implementation risk and also allows the feature to be enabled or disabled without affecting production code.
 
@@ -64,10 +67,15 @@ The naming convention `sampled_keys` two important facets. One is that it is enc
 ### The `b3` sampling key
 The special sampling key `b3` ensures secondarily sampled data are not confused with B3 sampled data. Remember, in normal Zipkin installs, presence of spans at all imply they were B3 sampled. Now that there are multiple destinations, we need to back-fill a tag to indicate the base case. This ensures the standard install doesn't accidentally receive more data than was B3 sampled. `b3` should never appear in the `sampling` header: it is a pointer to the sampling state of B3 headers.
 
+## Rate limited sampling keys
+In normal B3 propagation, a sampling rate is guaranteed by virtue of all requests being uniformly sampled or not. For example, a rate limiting implementation propagates `1` when sampled and '0' when not. By virtue continuous downstream propagation, all nodes know from these fields whether or not to record data.
+
+The `lastSpanId` parameter of a sampling field allows consistent rate limiting when secondary sampling. For example, the first triggered participant adds their outgoing span ID as the `lastSpanId` parameter. Other participants look to see if this parameter is present or not before themselves triggering.
+
 ## Impact of skipping a service
 It is possible that some sampling keys skip hops, or services, when recording. When this happens, parent IDs will be wrong, and also any dependency links will also be wrong. It may be heuristically possible to reconnect the spans, but this will push complexity into the forwarder, at least requiring it to buffer a trace based on a sampling key.
 
-For this reason, we always update the `spanId` parameter of the corresponding `sampling` field entry. When a discrepancy is noticed, this parameter is copied to the corresponding `sampled_keys` tag entry as `parentId`.
+For this reason, we always update the `lastSpanId` parameter of the corresponding `sampling` field entry. When a discrepancy is noticed, this parameter is copied to the corresponding `sampled_keys` tag entry as `parentId`.
 
 This allows any trace forwarders to correct the hierarchy as needed. Please look at the gatewayplay example for details.
 
@@ -115,7 +123,7 @@ When the auth service sees this key, it looks up the trigger and ttl parameters 
 
 Let's assume the decision was pass. The auth service records the request regardless of B3 headers and appends `authcache` to `span.tags.sampled_keys` when reporting the span. Outbound headers include the name of the sampling key, the ttl value and the span ID of the outbound request.
 ```
-sampling: authcache;ttl=1;spanId=19f84f102048e047
+sampling: authcache;ttl=1;lastSpanId=19f84f102048e047
 ```
 
 The cache service does not need any configuration state as it knows to trigger based on a non-zero TTL. Upon reading the header, it records decrements the ttl to 0, and appends `authcache` to `span.tags.sampled_keys` when reporting the span. The propagation logic knows to redact any ttl=0 fields. In other words, no special logic is needed to redact authcache.
@@ -126,22 +134,23 @@ I want to see 50 gateway requests per second with a path expression `/play/*`. H
 This use case is interesting because the trigger occurs at the same node that provisions the sampling key. Also, it involves skipping the `api` service, which may cause some technical concerns at the forwarding layer.
 
 #### Example flow
-
 Similar `authcache`, the gateway adds the sampling key `gatewayplay` to the `sampling` field.
 ```
 sampling: gatewayplay
 ```
 
-As the gateway itself is also a participant, internally it triggers a sampling decision based on out-of-band configuration. If that decision is accept, then only the `gatewayplay` key is propagated. If it was drop, then the key is redacted. In other words, a sampling key could be added and deleted before ever being encoded as a header, when the node provisioning the sampling key is also a participant.
+This use case shows that provisioning and triggering a sampling decision are decoupled even in the same node. First, a `gatewayplay` sampling key is provisioned based on out-of-band configuration. It is immediately evaluated, against the configured rate. If sampled, the `lastSpanId` parameter will be sent downstream.
 
 Let's assume the decision was pass. The gateway service records the request regardless of B3 headers and appends `gatewayplay` to `span.tags.sampled_keys` when reporting the span. Outbound headers include the name of the sampling key and the span ID of the outbound request.
 ```
-sampling: gatewayplay;spanId=26bd982d53f50d1f
+sampling: gatewayplay;lastSpanId=26bd982d53f50d1f
 ```
 
 The sampling field is unaltered as it passes the api service because out-of-band configuration does not trigger on the key `gatewayplay`. The api service would only report data if the request was B3 sampled.
 
-The api service triggers on this key. Noticing the last span ID is not its parent, it uses the propagated `spanId=26bd982d53f50d1f` as its parent ID when reporting the span. Literally, this would be `b3,gatewayplay;parentId=26bd982d53f50d1f` if b3 was also sampled. 
+The play service is configured participate and to honor the sample rate. It only triggers when both the `gatewayplay` sampling key exists and it has a `lastSpanId` parameter. Triggering regardless of `lastSpanId`, would be effectively 100% sampling. As `lastSpanId` is only present when upstream sampled, this guarantees the intended rate.
+
+Assuming that was present, play records the request. When reporting the span to Zipkin, it notices the last span ID is not its parent. To ensure the trace isn't hierarchically broken, it uses the propagated `lastSpanId=26bd982d53f50d1f` as its parent ID when reporting the span. Literally, this would be `b3,gatewayplay;parentId=26bd982d53f50d1f` if b3 was also sampled. 
 
 A trace forwarder could then use that data to fix the hierarchy. Possibly like this when sending to the `gatewayplay` participant:
 

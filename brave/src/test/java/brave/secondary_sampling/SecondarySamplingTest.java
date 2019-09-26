@@ -141,11 +141,11 @@ public class SecondarySamplingTest {
   @Test public void injectWritesNewLastParentWhenSampled() {
     Extra extra = new Extra();
     extra.put(SecondarySamplingState.create(MutableSecondarySamplingState.create("gatewayplay")
-      .parameter("spanId", notSpanId)), false);
+      .parameter("lastSpanId", notSpanId)), false);
     extra.put(SecondarySamplingState.create("links"), true);
     extra.put(SecondarySamplingState.create(MutableSecondarySamplingState.create("authcache")
       .parameter("ttl", "1")
-      .parameter("spanId", notSpanId)), false);
+      .parameter("lastSpanId", notSpanId)), false);
 
     TraceContext context = TraceContext.newBuilder()
       .traceId(1L).spanId(2L).sampled(false).extra(singletonList(extra)).build();
@@ -153,8 +153,8 @@ public class SecondarySamplingTest {
 
     // doesn't interfere with keys not sampled.
     assertThat(headers).containsEntry("sampling",
-      "gatewayplay;spanId=" + notSpanId + ","
-        + "links;spanId=" + context.spanIdString() + ","
-        + "authcache;ttl=1;spanId=" + notSpanId);
+      "gatewayplay;lastSpanId=" + notSpanId + ","
+        + "links;lastSpanId=" + context.spanIdString() + ","
+        + "authcache;ttl=1;lastSpanId=" + notSpanId);
   }
 }
