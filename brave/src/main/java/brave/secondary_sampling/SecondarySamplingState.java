@@ -18,15 +18,14 @@ import java.util.Map;
 
 /**
  * This type holds extracted state from a {@link SecondarySampling.Builder#fieldName(String)
- * sampling field} entry.
+ * sampling field} entry. This type is immutable and intended to be used as a key in a mapping of
+ * sampling keys to local sampling decisions.
  *
+ * Ex.
  * <p><pre>{@code
- * // programmatic construction
- * mutable = MutableSecondarySamplingState.create("authcache").ttl(1);
+ * mutable = MutableSecondarySamplingState.parse("authcache;ttl=1");
  * authcacheState = SecondarySamplingState.create(mutable);
  * }</pre>
- * <p>This type is immutable and intended to be used as a key in a mapping of sampling keys to
- * local sampling decisions.
  */
 public final class SecondarySamplingState {
   public static SecondarySamplingState create(String samplingKey) {

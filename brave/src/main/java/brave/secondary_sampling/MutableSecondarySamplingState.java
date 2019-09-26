@@ -21,9 +21,6 @@ import java.util.Map;
  * Mutable form of {@link SecondarySamplingState} for use in parsing and collaboration, prior to
  * marking immutable for local propagation.
  *
- * /** This type holds extracted state from a {@link SecondarySampling.Builder#fieldName(String)
- * sampling field} entry.
- *
  * <p><pre>{@code
  * // programmatic construction
  * authcacheState = MutableSecondarySamplingState.create("authcache").ttl(1);
