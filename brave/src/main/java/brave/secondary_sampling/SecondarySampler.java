@@ -46,7 +46,7 @@ import brave.propagation.TraceContext;
 public interface SecondarySampler {
   /**
    * Returning true will sample data for the {@link TraceContext#isLocalRoot() local root} of this
-   * trace, under the the given {@link SecondarySamplingState.Builder#samplingKey()}. Returning
+   * trace, under the the given {@link MutableSecondarySamplingState#samplingKey()}. Returning
    * false ignores the sampling key.
    *
    * <p>Here's an example of evaluating participation based on a configured service name.
@@ -54,13 +54,13 @@ public interface SecondarySampler {
    * return (state) -> isSampled(state.samplingKey(), localServiceName());
    * }</pre>
    *
-   * <p><h3>The builder argument</h3>
-   * Simple use cases will only read {@link SecondarySamplingState.Builder#samplingKey()}. This
+   * <p><h3>The state argument</h3>
+   * Simple use cases will only read {@link MutableSecondarySamplingState#samplingKey()}. This
    * argument is present to allow reading other parameters or refreshing a {@link
-   * SecondarySamplingState.Builder#ttl(int)}.
+   * MutableSecondarySamplingState#ttl(int)}.
    *
    * @param state state extracted from propagated fields for this sampling key.
-   * @return true if the {@link SecondarySamplingState.Builder#samplingKey()} is sampled.
+   * @return true if the {@link MutableSecondarySamplingState#samplingKey()} is sampled.
    */
-  boolean isSampled(SecondarySamplingState.Builder state);
+  boolean isSampled(MutableSecondarySamplingState state);
 }

@@ -14,7 +14,6 @@
 package brave.secondary_sampling;
 
 import brave.internal.Nullable;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -23,93 +22,31 @@ import java.util.Map;
  *
  * <p><pre>{@code
  * // programmatic construction
- * authcacheState = SecondarySamplingState.newBuilder("authcache").ttl(1).build()
- *
- * // parsing of the serialized form
- * authcacheState = SecondarySamplingState.parseBuilder("authcache;ttl=1");
+ * mutable = MutableSecondarySamplingState.create("authcache").ttl(1);
+ * authcacheState = SecondarySamplingState.create(mutable);
  * }</pre>
  * <p>This type is immutable and intended to be used as a key in a mapping of sampling keys to
  * local sampling decisions.
  */
 public final class SecondarySamplingState {
+  public static SecondarySamplingState create(String samplingKey) {
+    return new SecondarySamplingState(MutableSecondarySamplingState.create(samplingKey));
+  }
+
+  public static SecondarySamplingState create(MutableSecondarySamplingState state) {
+    return new SecondarySamplingState(state);
+  }
+
   public interface ParameterConsumer<K, V> {
     // BiConsumer is Java 1.8+
     void accept(K key, V value);
-  }
-
-  public static final Builder newBuilder(String samplingKey) {
-    if (samplingKey == null) throw new NullPointerException("samplingKey == null");
-    if (samplingKey.isEmpty()) throw new IllegalArgumentException("samplingKey is empty");
-    return new Builder(samplingKey);
-  }
-
-  /**
-   * Parses one entry from a comma-separated @link SecondarySampling.Builder#fieldName(String)
-   * sampling field}.
-   */
-  // Like Accept header, parameters are after semi-colon and themselves semi-colon delimited.
-  public static Builder parseBuilder(String entry) {
-    String[] nameParameters = entry.split(";", 100);
-    Builder result = newBuilder(nameParameters[0]);
-    for (int i = 1; i < nameParameters.length; i++) {
-      String[] nameValue = nameParameters[i].split("=", 2);
-      result.parameter(nameValue[0], nameValue[1]);
-    }
-    return result;
-  }
-
-  /** Mutable form of {@link brave.secondary_sampling.SecondarySamplingState} */
-  public static final class Builder {
-    final String samplingKey;
-    Map<String, String> parameters = new LinkedHashMap<>();
-
-    Builder(String samplingKey) {
-      this.samplingKey = samplingKey;
-    }
-
-    public String samplingKey() {
-      return samplingKey;
-    }
-
-    /** Retrieves the current TTL of this {@link #samplingKey()} or zero if there is none. */
-    @Nullable public int ttl() {
-      String ttl = parameter("ttl");
-      return ttl == null ? 0 : Integer.parseInt(ttl);
-    }
-
-    @Nullable public Builder ttl(int ttl) {
-      if (ttl == 0) return removeParameter("ttl");
-      return parameter("ttl", String.valueOf(ttl));
-    }
-
-    @Nullable public String parameter(String name) {
-      if (name == null) throw new NullPointerException("name == null");
-      return parameters.get(name);
-    }
-
-    @Nullable public Builder removeParameter(String name) {
-      if (name == null) throw new NullPointerException("name == null");
-      parameters.remove(name);
-      return this;
-    }
-
-    public Builder parameter(String name, String value) {
-      if (name == null) throw new NullPointerException("name == null");
-      if (value == null) throw new NullPointerException("value == null");
-      parameters.put(name, value);
-      return this;
-    }
-
-    public SecondarySamplingState build() {
-      return new SecondarySamplingState(this);
-    }
   }
 
   private final String samplingKey;
   private final Map<String, String> parameters;
   // intentionally hidden so we can change the state model
 
-  SecondarySamplingState(Builder builder) {
+  SecondarySamplingState(MutableSecondarySamplingState builder) {
     samplingKey = builder.samplingKey;
     parameters = builder.parameters;
   }
