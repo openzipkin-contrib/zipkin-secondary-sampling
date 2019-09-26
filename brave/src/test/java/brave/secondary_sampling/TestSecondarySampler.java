@@ -15,30 +15,29 @@ package brave.secondary_sampling;
 
 import brave.sampler.RateLimitingSampler;
 import brave.sampler.Sampler;
-import brave.secondary_sampling.SecondarySamplingPolicy.Trigger;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public final class TestSecondarySamplingPolicy {
-  public static final class TestTrigger implements Trigger {
+public final class TestSecondarySampler {
+  public static final class Trigger {
     Sampler sampler = Sampler.ALWAYS_SAMPLE;
     int ttl = 0; // zero means don't add ttl
 
-    public TestTrigger rps(int rps) {
+    public Trigger rps(int rps) {
       this.sampler = RateLimitingSampler.create(rps);
       return this;
     }
 
-    public TestTrigger ttl(int ttl) {
+    public Trigger ttl(int ttl) {
       this.ttl = ttl;
       return this;
     }
 
-    @Override public boolean isSampled() {
+    public boolean isSampled() {
       return sampler.isSampled(0L);
     }
 
-    @Override public int ttl() {
+    public int ttl() {
       return ttl;
     }
   }
@@ -47,31 +46,35 @@ public final class TestSecondarySamplingPolicy {
   final Map<String, Trigger> allServices = new LinkedHashMap<>();
   final Map<String, Map<String, Trigger>> byService = new LinkedHashMap<>();
 
-  TestSecondarySamplingPolicy addTrigger(String samplingKey, Trigger trigger) {
+  TestSecondarySampler addTrigger(String samplingKey, Trigger trigger) {
     allServices.put(samplingKey, trigger);
     return this;
   }
 
-  public SecondarySamplingPolicy forService(String serviceName) {
-    return samplingKey -> {
-      Trigger result = getByService(samplingKey).get(serviceName);
-      return result != null ? result : allServices.get(samplingKey);
+  public SecondarySampler forService(String serviceName) {
+    return (builder) -> {
+      Trigger trigger = getByService(builder.samplingKey()).get(serviceName);
+      if (trigger == null) trigger = allServices.get(builder.samplingKey());
+      if (trigger == null) return false;
+      boolean sampled = trigger.isSampled();
+      if (sampled) builder.ttl(trigger.ttl()); // Set any TTL
+      return sampled;
     };
   }
 
-  public TestSecondarySamplingPolicy addTrigger(String samplingKey, String serviceName,
+  public TestSecondarySampler addTrigger(String samplingKey, String serviceName,
     Trigger trigger) {
     getByService(samplingKey).put(serviceName, trigger);
     return this;
   }
 
-  TestSecondarySamplingPolicy removeTriggers(String samplingKey) {
+  TestSecondarySampler removeTriggers(String samplingKey) {
     allServices.remove(samplingKey);
     byService.remove(samplingKey);
     return this;
   }
 
-  public TestSecondarySamplingPolicy merge(TestSecondarySamplingPolicy input) {
+  public TestSecondarySampler merge(TestSecondarySampler input) {
     allServices.putAll(input.allServices);
     byService.putAll(input.byService);
     return this;

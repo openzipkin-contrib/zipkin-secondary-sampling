@@ -16,77 +16,59 @@ package brave.secondary_sampling;
 import brave.propagation.Propagation.Getter;
 import brave.propagation.TraceContext.Extractor;
 import brave.propagation.TraceContextOrSamplingFlags;
-import brave.secondary_sampling.SecondarySamplingPolicy.Trigger;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
-import static brave.secondary_sampling.SecondarySampling.parseParameters;
+import static brave.secondary_sampling.SecondarySampling.EXTRA_FACTORY;
 
 /**
- * This extracts the {@link SecondarySampling#fieldName sampling header}, and performs any TTL or
- * triggering logic based on the policy configured for this service.
+ * This extracts the {@link SecondarySampling#fieldName sampling header}, and parses it a list of
+ * {@link SecondarySamplingState}. For each extracted sampling key, TTL and sampling takes place if
+ * configured.
  */
 final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
   final Extractor<C> delegate;
   final Getter<C, K> getter;
-  final SecondarySamplingPolicy policy;
+  final SecondarySampler sampler;
   final K samplingKey;
 
   SecondarySamplingExtractor(SecondarySampling.Propagation<K> propagation, Getter<C, K> getter) {
     this.delegate = propagation.delegate.extractor(getter);
     this.getter = getter;
-    this.policy = propagation.secondarySampling.policy;
+    this.sampler = propagation.secondarySampling.sampler;
     this.samplingKey = propagation.samplingKey;
   }
 
   @Override public TraceContextOrSamplingFlags extract(C carrier) {
     TraceContextOrSamplingFlags result = delegate.extract(carrier);
-
     String maybeValue = getter.get(carrier, samplingKey);
-    SecondarySampling.Extra extra = new SecondarySampling.Extra();
-    TraceContextOrSamplingFlags.Builder builder = result.toBuilder().addExtra(extra);
-    if (maybeValue == null) return builder.build();
+    if (maybeValue == null) return result;
 
+    SecondarySampling.Extra extra = EXTRA_FACTORY.create();
+    boolean sampledLocal = false;
     for (String entry : maybeValue.split(",", 100)) {
-      String[] nameParameters = entry.split(";", 100);
-      String samplingKey = nameParameters[0];
-
-      Map<String, String> parameters = nameParameters.length > 1
-        ? parseParameters(nameParameters)
-        : new LinkedHashMap<>();
-      if (updateParametersAndSample(samplingKey, parameters)) {
-        extra.sampledKeys.add(samplingKey);
-        builder.sampledLocal(); // this means data will be recorded
-      }
-      extra.samplingKeyToParameters.put(samplingKey, parameters);
+      SecondarySamplingState.Builder builder = SecondarySamplingState.parseBuilder(entry);
+      boolean sampled = updateStateAndSample(builder);
+      if (sampled) sampledLocal = true;
+      extra.put(builder.build(), sampled);
     }
 
+    if (extra.isEmpty()) return result;
+
+    TraceContextOrSamplingFlags.Builder builder = result.toBuilder();
+    if (sampledLocal) builder.sampledLocal(); // Data will be recorded even if B3 unsampled
+    builder.addExtra(extra);
     return builder.build();
   }
 
-  boolean updateParametersAndSample(String samplingKey, Map<String, String> parameters) {
-    boolean sampled = false;
+  boolean updateStateAndSample(SecondarySamplingState.Builder builder) {
+    boolean ttlSampled = false;
 
     // decrement ttl from upstream, if there is one
-    int ttl = 0;
-    if (parameters.containsKey("ttl")) {
-      ttl = Integer.parseInt(parameters.remove("ttl")) - 1;
-      sampled = true;
+    int ttl = builder.ttl();
+    if (ttl != 0) {
+      builder.ttl(ttl - 1);
+      ttlSampled = true;
     }
 
-    // Lookup if our node should participate in this sampling policy
-    Trigger trigger = policy.getTrigger(samplingKey);
-    if (trigger != null) {
-      // make a new sampling decision
-      sampled = trigger.isSampled();
-
-      // establish or refresh TTL
-      if (trigger.ttl() != 0) ttl = trigger.ttl();
-    }
-
-    // Add any TTL
-    if (sampled && ttl != 0) parameters.put("ttl", Integer.toString(ttl));
-
-    return sampled;
+    return ttlSampled | sampler.isSampled(builder);
   }
 }

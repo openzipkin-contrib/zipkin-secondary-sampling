@@ -17,9 +17,7 @@ import brave.propagation.Propagation.Setter;
 import brave.propagation.TraceContext;
 import brave.propagation.TraceContext.Injector;
 import brave.secondary_sampling.SecondarySampling.Extra;
-import java.util.Map;
 import java.util.StringJoiner;
-import java.util.stream.Collectors;
 
 /**
  * This writes the {@link SecondarySampling#fieldName sampling header}, with an updated {@code
@@ -40,36 +38,32 @@ final class SecondarySamplingInjector<C, K> implements Injector<C> {
   @Override public void inject(TraceContext traceContext, C carrier) {
     delegate.inject(traceContext, carrier);
     Extra extra = traceContext.findExtra(Extra.class);
-    if (extra == null || extra.samplingKeyToParameters.isEmpty()) return;
+    if (extra == null || extra.isEmpty()) return;
     setter.put(carrier, samplingKey, serializeWithSpanId(extra, traceContext.spanIdString()));
   }
 
   static String serializeWithSpanId(Extra extra, String spanId) {
-    return extra.samplingKeyToParameters.entrySet()
-      .stream()
-      .map(e -> serializeWithSpanId(extra, e.getKey(), e.getValue(), spanId))
-      .collect(Collectors.joining(","));
+    StringJoiner joiner = new StringJoiner(",");
+    extra.forEach((state, sampled) -> joiner.merge(serializeWithSpanId(state, sampled, spanId)));
+    return joiner.toString();
   }
 
-  static String serializeWithSpanId(Extra extra, String samplingKey, Map<String, String> parameters,
+  static StringJoiner serializeWithSpanId(SecondarySamplingState state, boolean sampled,
     String spanId) {
     StringJoiner joiner = new StringJoiner(";");
-    joiner.add(samplingKey);
-    String lastSpanId = null;
-    for (Map.Entry<String, String> entry : parameters.entrySet()) {
-      if ("spanId".equals(entry.getKey())) {
-        lastSpanId = entry.getValue();
-        continue;
-      }
-      joiner.add(entry.getKey() + "=" + entry.getValue());
-    }
+    joiner.add(state.samplingKey());
 
-    if (extra.sampledKeys.contains(samplingKey)) {
+    String lastSpanId = state.parameter("spanId");
+    state.forEachParameter((key, value) -> {
+      if (!"spanId".equals(key)) joiner.add(key + "=" + value);
+    });
+
+    if (sampled) {
       joiner.add("spanId=" + spanId);
     } else if (lastSpanId != null) { // pass through the last span ID
       joiner.add("spanId=" + lastSpanId);
     }
 
-    return joiner.toString();
+    return joiner;
   }
 }

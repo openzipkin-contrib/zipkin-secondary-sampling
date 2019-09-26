@@ -40,19 +40,22 @@ final class SecondarySamplingFinishedSpanHandler extends brave.handler.FinishedS
 
     Extra extra = context.findExtra(Extra.class);
     if (extra != null) {
-      String parentId = null;
+      String parentId;
       if (context.isLocalRoot()) {
         parentId = context.shared() ? context.spanIdString() : context.parentIdString();
+      } else {
+        parentId = null;
       }
 
-      for (String sampledKey : extra.sampledKeys) {
-        String upstreamSpanId = extra.samplingKeyToParameters.get(sampledKey).get("spanId");
+      extra.forEach((state, sampled) -> {
+        if (!sampled) return;
+        String upstreamSpanId = state.parameter("spanId");
         if (parentId != null && !parentId.equals(upstreamSpanId)) {
-          joiner.add(sampledKey + ";parentId=" + upstreamSpanId);
+          joiner.add(state.samplingKey() + ";parentId=" + upstreamSpanId);
         } else {
-          joiner.add(sampledKey);
+          joiner.add(state.samplingKey());
         }
-      }
+      });
     }
 
     if (joiner.length() != 0) span.tag(tagName, joiner.toString());
