@@ -13,13 +13,12 @@
  */
 package brave.secondary_sampling;
 
-import brave.http.HttpSampler;
-import brave.http.HttpServerRequest;
 import brave.propagation.TraceContext;
 
 /**
- * Decides whether the {@link TraceContext#isLocalRoot() local root} of this request will be sampled
- * for the given sampling key.
+ * This is invoked during {@link TraceContext.Extractor#extract(Object)}, for each sampling key
+ * parsed from propagation fields. This decides if the {@link TraceContext#isLocalRoot() local root}
+ * of this request will be sampled for the given sampling key.
  *
  * <p><h3>Details</h3>
  * To review, a {@link TraceContext#isLocalRoot() local root} is the partition of a trace that
@@ -43,24 +42,16 @@ import brave.propagation.TraceContext;
  *
  * <p>Please read the <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">design
  * doc</a> for more concepts.
- *
- * <p><h3>Implementation notes</h3>
- * This is invoked during {@link TraceContext.Extractor#extract(Object)}, for each sampling key
- * parsed. Unlike {@link HttpSampler}, it is possible that the request is not HTTP, hence the type
- * is {@code Object}. For example, it could be a different RPC request, or a messaging type.
  */
-// Unlike brave.http.HttpSampler, there are generic types, so no problems implementing with lambdas where Java 1.8+ is available
 public interface SecondarySampler {
   /**
    * Returning true will sample data for the {@link TraceContext#isLocalRoot() local root} of this
-   * request, under the the given {@link SecondarySamplingState.Builder#samplingKey()}. Returning
+   * trace, under the the given {@link SecondarySamplingState.Builder#samplingKey()}. Returning
    * false ignores the sampling key.
    *
-   * <p>For example, to only handle http requests, implement like so:
+   * <p>Here's an example of evaluating participation based on a configured service name.
    * <pre>{@code
-   *     if (!(carrier instanceof HttpServerRequest)) return false;
-   *     HttpServerRequest request = (HttpServerRequest) carrier;
-   *     return isSampled(request, builder.samplingKey());
+   * return (state) -> isSampled(state.samplingKey(), localServiceName());
    * }</pre>
    *
    * <p><h3>The builder argument</h3>
@@ -68,10 +59,8 @@ public interface SecondarySampler {
    * argument is present to allow reading other parameters or refreshing a {@link
    * SecondarySamplingState.Builder#ttl(int)}.
    *
-   * @param request the incoming request type, possibly {@link HttpServerRequest}
-   * @param builder state extracted for this sampling key.
-   * @return true if the {@link SecondarySamplingState.Builder#samplingKey()} is sampled for this
-   * request
+   * @param state state extracted from propagated fields for this sampling key.
+   * @return true if the {@link SecondarySamplingState.Builder#samplingKey()} is sampled.
    */
-  boolean isSampled(Object request, SecondarySamplingState.Builder builder);
+  boolean isSampled(SecondarySamplingState.Builder state);
 }

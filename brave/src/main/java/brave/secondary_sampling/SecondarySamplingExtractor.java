@@ -46,7 +46,7 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
     boolean sampledLocal = false;
     for (String entry : maybeValue.split(",", 100)) {
       SecondarySamplingState.Builder builder = SecondarySamplingState.parseBuilder(entry);
-      boolean sampled = updateStateAndSample(carrier, builder);
+      boolean sampled = updateStateAndSample(builder);
       if (sampled) sampledLocal = true;
       extra.put(builder.build(), sampled);
     }
@@ -59,7 +59,7 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
     return builder.build();
   }
 
-  boolean updateStateAndSample(C carrier, SecondarySamplingState.Builder builder) {
+  boolean updateStateAndSample(SecondarySamplingState.Builder builder) {
     boolean ttlSampled = false;
 
     // decrement ttl from upstream, if there is one
@@ -69,6 +69,6 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
       ttlSampled = true;
     }
 
-    return ttlSampled | sampler.isSampled(carrier, builder);
+    return ttlSampled | sampler.isSampled(builder);
   }
 }

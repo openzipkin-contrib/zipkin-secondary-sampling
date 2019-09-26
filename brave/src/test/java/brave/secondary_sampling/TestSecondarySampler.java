@@ -52,8 +52,7 @@ public final class TestSecondarySampler {
   }
 
   public SecondarySampler forService(String serviceName) {
-    return (request, builder) -> {
-      // TODO: request currently unused: make an example of request-based sampling
+    return (builder) -> {
       Trigger trigger = getByService(builder.samplingKey()).get(serviceName);
       if (trigger == null) trigger = allServices.get(builder.samplingKey());
       if (trigger == null) return false;
