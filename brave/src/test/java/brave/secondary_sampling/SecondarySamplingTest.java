@@ -75,9 +75,9 @@ public class SecondarySamplingTest {
       ((Extra) extracted.extra().get(0)).toMap();
     assertThat(stateToSampled)
       // no TTL left for the next hop
-      .containsEntry(SecondarySamplingState.newBuilder("authcache").build(), true)
+      .containsEntry(SecondarySamplingState.create("authcache"), true)
       // not sampled because there's no trigger for links
-      .containsEntry(SecondarySamplingState.newBuilder("links").build(), false);
+      .containsEntry(SecondarySamplingState.create("links"), false);
   }
 
   /** This shows an example of dynamic configuration */
@@ -112,13 +112,12 @@ public class SecondarySamplingTest {
     Map<SecondarySamplingState, Boolean> stateToSampled =
       ((Extra) extracted.extra().get(0)).toMap();
     assertThat(stateToSampled).containsOnly(
-      entry(SecondarySamplingState.newBuilder("links").build(), true),
+      entry(SecondarySamplingState.create("links"), true),
       // authcache triggers a ttl
-      entry(SecondarySamplingState.newBuilder("authcache")
-        .parameter("ttl", "1")
-        .build(), true),
+      entry(SecondarySamplingState.create(MutableSecondarySamplingState.create("authcache")
+        .parameter("ttl", "1")), true),
       // not sampled as we aren't in that service
-      entry(SecondarySamplingState.newBuilder("gatewayplay").build(), false)
+      entry(SecondarySamplingState.create("gatewayplay"), false)
     );
   }
 
@@ -133,21 +132,20 @@ public class SecondarySamplingTest {
       ((Extra) extracted.extra().get(0)).toMap();
     assertThat(stateToSampled)
       // not sampled due to config, rather from TTL: note it is decremented
-      .containsEntry(SecondarySamplingState.newBuilder("authcache")
-        .parameter("ttl", "1")
-        .build(), true)
+      .containsEntry(SecondarySamplingState.create(MutableSecondarySamplingState.create("authcache")
+        .parameter("ttl", "1")), true)
       // not sampled as we aren't in that service
-      .containsEntry(SecondarySamplingState.newBuilder("gatewayplay").build(), false);
+      .containsEntry(SecondarySamplingState.create("gatewayplay"), false);
   }
 
   @Test public void injectWritesNewLastParentWhenSampled() {
     Extra extra = new Extra();
-    extra.put(SecondarySamplingState.newBuilder("gatewayplay")
-      .parameter("spanId", notSpanId).build(), false);
-    extra.put(SecondarySamplingState.newBuilder("links").build(), true);
-    extra.put(SecondarySamplingState.newBuilder("authcache")
+    extra.put(SecondarySamplingState.create(MutableSecondarySamplingState.create("gatewayplay")
+      .parameter("spanId", notSpanId)), false);
+    extra.put(SecondarySamplingState.create("links"), true);
+    extra.put(SecondarySamplingState.create(MutableSecondarySamplingState.create("authcache")
       .parameter("ttl", "1")
-      .parameter("spanId", notSpanId).build(), false);
+      .parameter("spanId", notSpanId)), false);
 
     TraceContext context = TraceContext.newBuilder()
       .traceId(1L).spanId(2L).sampled(false).extra(singletonList(extra)).build();

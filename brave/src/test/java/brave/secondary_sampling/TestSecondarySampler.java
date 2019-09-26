@@ -52,12 +52,12 @@ public final class TestSecondarySampler {
   }
 
   public SecondarySampler forService(String serviceName) {
-    return (builder) -> {
-      Trigger trigger = getByService(builder.samplingKey()).get(serviceName);
-      if (trigger == null) trigger = allServices.get(builder.samplingKey());
+    return (state) -> {
+      Trigger trigger = getByService(state.samplingKey()).get(serviceName);
+      if (trigger == null) trigger = allServices.get(state.samplingKey());
       if (trigger == null) return false;
       boolean sampled = trigger.isSampled();
-      if (sampled) builder.ttl(trigger.ttl()); // Set any TTL
+      if (sampled) state.ttl(trigger.ttl()); // Set any TTL
       return sampled;
     };
   }
