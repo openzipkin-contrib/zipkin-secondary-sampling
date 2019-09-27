@@ -22,6 +22,7 @@ import brave.http.HttpServerHandler;
 import brave.http.HttpServerRequest;
 import brave.http.HttpServerResponse;
 import brave.http.HttpTracing;
+import brave.internal.Nullable;
 import brave.propagation.CurrentTraceContext;
 import brave.propagation.CurrentTraceContext.Scope;
 import java.util.ArrayList;
@@ -94,6 +95,17 @@ class TracedNode {
     HttpTracing httpTracing = HttpTracing.create(tracingFunction.apply(localServiceName));
     this.serverHandler = HttpServerHandler.create(httpTracing);
     this.clientHandler = HttpClientHandler.create(httpTracing);
+  }
+
+  /** Returns the first node in the service graph with the given name, or null if none match. */
+  @Nullable TracedNode findDownStream(String serviceName) {
+    if (serviceName == null) throw new NullPointerException("serviceName == null");
+    if (localServiceName.equals(serviceName)) return this;
+    for (TracedNode down : downstream) {
+      TracedNode result = down.findDownStream(serviceName);
+      if (result != null) return result;
+    }
+    return null;
   }
 
   TracedNode addDownStream(TracedNode downstream) {

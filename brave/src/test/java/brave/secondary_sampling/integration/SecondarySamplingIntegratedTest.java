@@ -30,6 +30,7 @@ import zipkin2.DependencyLink;
 import zipkin2.reporter.Reporter;
 import zipkin2.storage.InMemoryStorage;
 
+import static brave.secondary_sampling.TestSecondarySampler.Trigger.Mode.PASSIVE;
 import static brave.secondary_sampling.TraceForwarder.NOOP_CALLBACK;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,7 +54,7 @@ public class SecondarySamplingIntegratedTest {
 
   TestSecondarySampler gatewayplaySampler = new TestSecondarySampler()
     .addTrigger("gatewayplay", "gateway", new Trigger().rps(50))
-    .addTrigger("gatewayplay", "playback", new Trigger());
+    .addTrigger("gatewayplay", "playback", new Trigger().mode(PASSIVE));
 
   TestSecondarySampler authcacheSampler = new TestSecondarySampler()
     .addTrigger("authcache", "auth", new Trigger().rps(100).ttl(1));
@@ -185,6 +186,16 @@ public class SecondarySamplingIntegratedTest {
       DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
     );
     assertThat(authcache.getDependencies()).isEmpty();
+
+    int gatewayplayTraceCount = gatewayplay.getTraces().size();
+    // TODO: Add request-based parameters so that we only sample when sending to /play
+    // Right now, the test implementation only looks at service name, so also reports
+    // gateway -> /recommend
+    assertThat(gatewayplayTraceCount).isEqualTo(2);
+
+    // Hit playback directly as opposed to via the gateway. This should not increase the trace count
+    serviceRoot.findDownStream("playback").execute("/play", headers);
+    assertThat(gatewayplay.getTraces()).hasSize(gatewayplayTraceCount);
   }
 
   @Test public void gatewayplay_b3_sampled() {

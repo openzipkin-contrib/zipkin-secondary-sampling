@@ -20,6 +20,14 @@ import java.util.Map;
 
 public final class TestSecondarySampler {
   public static final class Trigger {
+    public enum Mode {
+      /** Triggers regardless of if upstream sampled. */
+      ACTIVE,
+      /** Triggers only when upstream sampled. */
+      PASSIVE
+    }
+
+    Mode mode = Mode.ACTIVE;
     Sampler sampler = Sampler.ALWAYS_SAMPLE;
     int ttl = 0; // zero means don't add ttl
 
@@ -30,6 +38,11 @@ public final class TestSecondarySampler {
 
     public Trigger ttl(int ttl) {
       this.ttl = ttl;
+      return this;
+    }
+
+    public Trigger mode(Mode mode) {
+      this.mode = mode;
       return this;
     }
 
@@ -56,6 +69,12 @@ public final class TestSecondarySampler {
       Trigger trigger = getByService(state.samplingKey()).get(serviceName);
       if (trigger == null) trigger = allServices.get(state.samplingKey());
       if (trigger == null) return false;
+
+      // When in passive mode, we only evaluate when upstream did
+      if (trigger.mode == Trigger.Mode.PASSIVE) {
+        return state.parameter("spanId") != null;
+      }
+
       boolean sampled = trigger.isSampled();
       if (sampled) state.ttl(trigger.ttl()); // Set any TTL
       return sampled;

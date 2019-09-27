@@ -53,15 +53,15 @@ final class SecondarySamplingInjector<C, K> implements Injector<C> {
     StringJoiner joiner = new StringJoiner(";");
     joiner.add(state.samplingKey());
 
-    String lastSpanId = state.parameter("spanId");
+    String upstreamSpanId = state.parameter("spanId");
     state.forEachParameter((key, value) -> {
       if (!"spanId".equals(key)) joiner.add(key + "=" + value);
     });
 
     if (sampled) {
       joiner.add("spanId=" + spanId);
-    } else if (lastSpanId != null) { // pass through the last span ID
-      joiner.add("spanId=" + lastSpanId);
+    } else if (spanId != null) { // pass through the upstream span ID
+      joiner.add("spanId=" + upstreamSpanId);
     }
 
     return joiner;

@@ -46,8 +46,8 @@ import brave.propagation.TraceContext;
 public interface SecondarySampler {
   /**
    * Returning true will sample data for the {@link TraceContext#isLocalRoot() local root} of this
-   * trace, under the the given {@link MutableSecondarySamplingState#samplingKey()}. Returning
-   * false ignores the sampling key.
+   * trace, under the the given {@link MutableSecondarySamplingState#samplingKey()}. Returning false
+   * ignores the sampling key.
    *
    * <p>Here's an example of evaluating participation based on a configured service name.
    * <pre>{@code
