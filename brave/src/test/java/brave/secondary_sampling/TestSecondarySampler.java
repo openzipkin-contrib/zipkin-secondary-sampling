@@ -71,8 +71,8 @@ public final class TestSecondarySampler {
       if (trigger == null) return false;
 
       // When in passive mode, we only evaluate when upstream did
-      if (trigger.mode == Trigger.Mode.PASSIVE) {
-        return state.parameter("spanId") != null;
+      if (trigger.mode == Trigger.Mode.PASSIVE && state.parameter("spanId") == null) {
+        return false;
       }
 
       boolean sampled = trigger.isSampled();
