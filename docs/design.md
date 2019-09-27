@@ -47,7 +47,7 @@ sampling: authcache;ttl=1
 The naming convention `sampling` follows the same design concern as [b3 single](https://github.com/openzipkin/b3-propagation/blob/master/RATIONALE.md#relationship-to-jms-java-message-service). Basically, hyphens cause problems across messaging links. By avoiding them, we allow the same system to work with message traces as opposed to just RPC ones, and with no conversion concerns.  This encoding is the similar to the [Accept header](https://tools.ietf.org/html/rfc7231#section-5.3.2) in order to provide familiarity.
 
 ### `spanId` parameter
-The `spanId` parameter should be added to a sampling key when only a subset of the service graph is triggered. This allows features like rate-limiting to be applied consistently. It also allows intentional gaps between triggers to be repaired later. Details about the `spanId` are discussed later in this document. 
+The `spanId` parameter must be added to a sampling key when only a subset of the service graph is triggered or when participants are sampling less than 100%. Details on how the `spanId` is used are covered later in this document. 
 
 ## Non-interference
 The application is unaware secondary sampling. It is critical that this design and tooling in no way change the api surface to instrumentation libraries, such as what's used by frameworks like Spring Boot. This reduces implementation risk and also allows the feature to be enabled or disabled without affecting production code.
