@@ -37,16 +37,16 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
     this.samplingKey = propagation.samplingKey;
   }
 
-  @Override public TraceContextOrSamplingFlags extract(C carrier) {
-    TraceContextOrSamplingFlags result = delegate.extract(carrier);
-    String maybeValue = getter.get(carrier, samplingKey);
+  @Override public TraceContextOrSamplingFlags extract(C request) {
+    TraceContextOrSamplingFlags result = delegate.extract(request);
+    String maybeValue = getter.get(request, samplingKey);
     if (maybeValue == null) return result;
 
     SecondarySampling.Extra extra = EXTRA_FACTORY.create();
     boolean sampledLocal = false;
     for (String entry : maybeValue.split(",", 100)) {
       MutableSecondarySamplingState state = MutableSecondarySamplingState.parse(entry);
-      boolean sampled = updateStateAndSample(state);
+      boolean sampled = updateStateAndSample(request, state);
       if (sampled) sampledLocal = true;
       extra.put(SecondarySamplingState.create(state), sampled);
     }
@@ -59,7 +59,7 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
     return builder.build();
   }
 
-  boolean updateStateAndSample(MutableSecondarySamplingState state) {
+  boolean updateStateAndSample(Object request, MutableSecondarySamplingState state) {
     boolean ttlSampled = false;
 
     // decrement ttl from upstream, if there is one
@@ -69,6 +69,6 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
       ttlSampled = true;
     }
 
-    return ttlSampled || sampler.isSampled(state);
+    return ttlSampled || sampler.isSampled(request, state);
   }
 }

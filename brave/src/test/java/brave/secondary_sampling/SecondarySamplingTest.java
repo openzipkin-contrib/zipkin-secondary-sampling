@@ -13,6 +13,8 @@
  */
 package brave.secondary_sampling;
 
+import brave.http.HttpClientRequest;
+import brave.http.HttpServerRequest;
 import brave.propagation.B3SinglePropagation;
 import brave.propagation.Propagation;
 import brave.propagation.TraceContext;
@@ -21,8 +23,6 @@ import brave.propagation.TraceContext.Injector;
 import brave.propagation.TraceContextOrSamplingFlags;
 import brave.secondary_sampling.SecondarySampling.Extra;
 import brave.secondary_sampling.TestSecondarySampler.Trigger;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import org.junit.Test;
 
 import static brave.propagation.Propagation.KeyFactory.STRING;
@@ -44,36 +44,36 @@ public class SecondarySamplingTest {
 
   Propagation<String> propagation = secondarySampling.create(STRING);
 
-  Extractor<Map<String, String>> extractor = propagation.extractor(Map::get);
-  Injector<Map<String, String>> injector = propagation.injector(Map::put);
+  Extractor<HttpServerRequest> extractor = propagation.extractor(HttpServerRequest::header);
+  Injector<HttpClientRequest> injector = propagation.injector(HttpClientRequest::header);
 
-  Map<String, String> headers = new LinkedHashMap<>();
+  FakeRequest.Client clientRequest = new FakeRequest.Client();
+  FakeRequest.Server serverRequest = new FakeRequest.Server();
 
   @Test public void extract_samplesLocalWhenConfigured() {
-    // base case: links is configured, authcache is not. authcache is in the headers, though!
+    // base case: links is configured, authcache is not. authcache is in the serverRequest, though!
     sampler.addTrigger("links", new Trigger());
 
-    headers.put("b3", "0");
-    headers.put("sampling", "authcache"); // sampling hint should not trigger
+    serverRequest.header("b3", "0");
+    serverRequest.header("sampling", "authcache"); // sampling hint should not trigger
 
-    assertThat(extractor.extract(headers).sampledLocal()).isFalse();
+    assertThat(extractor.extract(serverRequest).sampledLocal()).isFalse();
 
-    headers.put("b3", "0");
-    headers.put("sampling", "links,authcache;ttl=1"); // links should trigger
+    serverRequest.header("b3", "0");
+    serverRequest.header("sampling", "links,authcache;ttl=1"); // links should trigger
 
-    assertThat(extractor.extract(headers).sampledLocal()).isTrue();
+    assertThat(extractor.extract(serverRequest).sampledLocal()).isTrue();
   }
 
   /** This shows that TTL is applied regardless of sampler */
   @Test public void extract_ttlOverridesSampler() {
-    headers.put("b3", "0");
-    headers.put("sampling", "links,authcache;ttl=1");
+    serverRequest.header("b3", "0");
+    serverRequest.header("sampling", "links,authcache;ttl=1");
 
-    TraceContextOrSamplingFlags extracted = extractor.extract(headers);
+    TraceContextOrSamplingFlags extracted = extractor.extract(serverRequest);
+    Extra extra = (Extra) extracted.extra().get(0);
 
-    Map<SecondarySamplingState, Boolean> stateToSampled =
-      ((Extra) extracted.extra().get(0)).toMap();
-    assertThat(stateToSampled)
+    assertThat(extra.toMap())
       // no TTL left for the next hop
       .containsEntry(SecondarySamplingState.create("authcache"), true)
       // not sampled because there's no trigger for links
@@ -82,21 +82,21 @@ public class SecondarySamplingTest {
 
   /** This shows an example of dynamic configuration */
   @Test public void dynamicConfiguration() {
-    // base case: links is configured, authcache is not. authcache is in the headers, though!
+    // base case: links is configured, authcache is not. authcache is in the serverRequest, though!
     sampler.addTrigger("links", new Trigger());
 
-    headers.put("b3", "0");
-    headers.put("sampling", "links,authcache");
+    serverRequest.header("b3", "0");
+    serverRequest.header("sampling", "links,authcache");
 
-    assertThat(extractor.extract(headers).sampledLocal()).isTrue();
+    assertThat(extractor.extract(serverRequest).sampledLocal()).isTrue();
 
     // dynamic configuration removes link processing
     sampler.removeTriggers("links");
-    assertThat(extractor.extract(headers).sampledLocal()).isFalse();
+    assertThat(extractor.extract(serverRequest).sampledLocal()).isFalse();
 
     // dynamic configuration adds authcache processing
     sampler.addTrigger("authcache", serviceName, new Trigger());
-    assertThat(extractor.extract(headers).sampledLocal()).isTrue();
+    assertThat(extractor.extract(serverRequest).sampledLocal()).isTrue();
   }
 
   @Test public void extract_convertsConfiguredRpsToDecision() {
@@ -104,14 +104,13 @@ public class SecondarySamplingTest {
     sampler.addTrigger("links", new Trigger());
     sampler.addTrigger("authcache", new Trigger().rps(100).ttl(1));
 
-    headers.put("b3", "0");
-    headers.put("sampling", "gatewayplay,links,authcache");
+    serverRequest.header("b3", "0");
+    serverRequest.header("sampling", "gatewayplay,links,authcache");
 
-    TraceContextOrSamplingFlags extracted = extractor.extract(headers);
+    TraceContextOrSamplingFlags extracted = extractor.extract(serverRequest);
+    Extra extra = (Extra) extracted.extra().get(0);
 
-    Map<SecondarySamplingState, Boolean> stateToSampled =
-      ((Extra) extracted.extra().get(0)).toMap();
-    assertThat(stateToSampled).containsOnly(
+    assertThat(extra.toMap()).containsOnly(
       entry(SecondarySamplingState.create("links"), true),
       // authcache triggers a ttl
       entry(SecondarySamplingState.create(MutableSecondarySamplingState.create("authcache")
@@ -122,15 +121,13 @@ public class SecondarySamplingTest {
   }
 
   @Test public void extract_decrementsTtlEvenWhenNotConfigured() {
-    headers.put("b3", "0");
-    headers.put("sampling", "gatewayplay,authcache;ttl=2");
+    serverRequest.header("b3", "0");
+    serverRequest.header("sampling", "gatewayplay,authcache;ttl=2");
 
-    TraceContextOrSamplingFlags extracted = extractor.extract(headers);
+    TraceContextOrSamplingFlags extracted = extractor.extract(serverRequest);
     Extra extra = (Extra) extracted.extra().get(0);
 
-    Map<SecondarySamplingState, Boolean> stateToSampled =
-      ((Extra) extracted.extra().get(0)).toMap();
-    assertThat(stateToSampled)
+    assertThat(extra.toMap())
       // not sampled due to config, rather from TTL: note it is decremented
       .containsEntry(SecondarySamplingState.create(MutableSecondarySamplingState.create("authcache")
         .parameter("ttl", "1")), true)
@@ -149,10 +146,10 @@ public class SecondarySamplingTest {
 
     TraceContext context = TraceContext.newBuilder()
       .traceId(1L).spanId(2L).sampled(false).extra(singletonList(extra)).build();
-    injector.inject(context, headers);
+    injector.inject(context, clientRequest);
 
     // doesn't interfere with keys not sampled.
-    assertThat(headers).containsEntry("sampling",
+    assertThat(clientRequest.header("sampling")).isEqualTo(
       "gatewayplay;spanId=" + notSpanId + ","
         + "links;spanId=" + context.spanIdString() + ","
         + "authcache;ttl=1;spanId=" + notSpanId);

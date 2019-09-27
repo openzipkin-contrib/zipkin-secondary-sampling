@@ -39,7 +39,7 @@
 
     <!-- This allows you to test feature branches with jitpack -->
     <brave.groupId>com.github.openzipkin.brave</brave.groupId>
-    <brave.version>master-SNAPSHOT</brave.version>
+    <brave.version>request-sampler-SNAPSHOT</brave.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />
