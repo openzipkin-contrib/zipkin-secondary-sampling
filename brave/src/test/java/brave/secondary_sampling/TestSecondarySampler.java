@@ -23,7 +23,7 @@ public final class TestSecondarySampler {
     public enum Mode {
       /** Triggers regardless of if upstream sampled. */
       ACTIVE,
-      /** Triggers only when upstream sampled. */
+      /** Triggers always when upstream sampled. Similar to b3 sampling*/
       PASSIVE
     }
 
@@ -70,7 +70,8 @@ public final class TestSecondarySampler {
       if (trigger == null) trigger = allServices.get(state.samplingKey());
       if (trigger == null) return false;
 
-      // When in passive mode, we only evaluate when upstream did
+      // When in passive mode, we always trigger when upstream did
+      // Similar to b3 sampling
       if (trigger.mode == Trigger.Mode.PASSIVE) {
         return state.parameter("spanId") != null;
       }
