@@ -21,11 +21,12 @@ import brave.propagation.TraceContext;
 import brave.propagation.TraceContext.Extractor;
 import brave.propagation.TraceContext.Injector;
 import brave.propagation.TraceContextOrSamplingFlags;
+import brave.sampler.RateLimitingSampler;
 import brave.secondary_sampling.SecondarySampling.Extra;
-import brave.secondary_sampling.TestSecondarySampler.Trigger;
 import org.junit.Test;
 
 import static brave.propagation.Propagation.KeyFactory.STRING;
+import static brave.secondary_sampling.SecondarySamplers.active;
 import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
@@ -35,11 +36,12 @@ import static org.assertj.core.api.Assertions.entry;
  * Sampling</a> proof of concept.
  */
 public class SecondarySamplingTest {
-  String serviceName = "auth", notServiceName = "gateway", notSpanId = "19f84f102048e047";
-  TestSecondarySampler sampler = new TestSecondarySampler();
+  String serviceName = "auth", unknown = "unknown", notSpanId = "19f84f102048e047";
+  SamplerController sampler = new SamplerController.Default();
   SecondarySampling secondarySampling = SecondarySampling.newBuilder()
     .propagationFactory(B3SinglePropagation.FACTORY)
-    .sampler(sampler.forService(serviceName))
+    .httpServerSampler(sampler.primaryHttpSampler(serviceName))
+    .secondarySampler(sampler.secondarySampler(serviceName))
     .build();
 
   Propagation<String> propagation = secondarySampling.create(STRING);
@@ -52,7 +54,7 @@ public class SecondarySamplingTest {
 
   @Test public void extract_samplesLocalWhenConfigured() {
     // base case: links is configured, authcache is not. authcache is in the serverRequest, though!
-    sampler.addTrigger("links", new Trigger());
+    sampler.putSecondaryRule("links", active());
 
     serverRequest.header("b3", "0");
     serverRequest.header("sampling", "authcache"); // sampling hint should not trigger
@@ -83,7 +85,7 @@ public class SecondarySamplingTest {
   /** This shows an example of dynamic configuration */
   @Test public void dynamicConfiguration() {
     // base case: links is configured, authcache is not. authcache is in the serverRequest, though!
-    sampler.addTrigger("links", new Trigger());
+    sampler.putSecondaryRule("links", active());
 
     serverRequest.header("b3", "0");
     serverRequest.header("sampling", "links,authcache");
@@ -91,18 +93,18 @@ public class SecondarySamplingTest {
     assertThat(extractor.extract(serverRequest).sampledLocal()).isTrue();
 
     // dynamic configuration removes link processing
-    sampler.removeTriggers("links");
+    sampler.removeSecondaryRules("links");
     assertThat(extractor.extract(serverRequest).sampledLocal()).isFalse();
 
     // dynamic configuration adds authcache processing
-    sampler.addTrigger("authcache", serviceName, new Trigger());
+    sampler.putSecondaryRule(serviceName, "authcache", active());
     assertThat(extractor.extract(serverRequest).sampledLocal()).isTrue();
   }
 
   @Test public void extract_convertsConfiguredRpsToDecision() {
-    sampler.addTrigger("gatewayplay", notServiceName, new Trigger().rps(50));
-    sampler.addTrigger("links", new Trigger());
-    sampler.addTrigger("authcache", new Trigger().rps(100).ttl(1));
+    sampler.putSecondaryRule(unknown, "gatewayplay", active(RateLimitingSampler.create(50)));
+    sampler.putSecondaryRule("links", active());
+    sampler.putSecondaryRule("authcache", active(RateLimitingSampler.create(100), 1));
 
     serverRequest.header("b3", "0");
     serverRequest.header("sampling", "gatewayplay,links,authcache");

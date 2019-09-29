@@ -23,14 +23,17 @@ import brave.http.HttpServerRequest;
 import brave.http.HttpServerResponse;
 import brave.http.HttpTracing;
 import brave.internal.Nullable;
+import brave.propagation.B3SinglePropagation;
 import brave.propagation.CurrentTraceContext;
 import brave.propagation.CurrentTraceContext.Scope;
+import brave.secondary_sampling.SecondarySampling;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
+import zipkin2.reporter.Reporter;
 
 class TracedNode {
   // gateway -> api -> auth -> cache  -> authdb
@@ -38,8 +41,10 @@ class TracedNode {
   //                -> playback -> license -> cache -> licensedb
   //                            -> moviemetadata
   //                            -> streams
-  static TracedNode createServiceGraph(Function<String, Tracing> tracingFunction) {
-    TracedNode.Factory nodeFactory = new TracedNode.Factory(tracingFunction);
+  static TracedNode createServiceGraph(
+    Function<String, SecondarySampling> secondarySamplingFunction,
+    Reporter<zipkin2.Span> reporter) {
+    TracedNode.Factory nodeFactory = new TracedNode.Factory(secondarySamplingFunction, reporter);
     TracedNode gateway = nodeFactory.create("gateway");
     TracedNode api = nodeFactory.create("api", (endpoint, serviceName) -> {
       if (serviceName.equals("playback")) return endpoint.equals("/play");
@@ -64,18 +69,35 @@ class TracedNode {
   }
 
   static class Factory {
-    final Function<String, Tracing> tracingFunction;
+    final Function<String, SecondarySampling> secondarySamplingFunction;
+    final Reporter<zipkin2.Span> reporter;
 
-    Factory(Function<String, Tracing> tracingFunction) {
-      this.tracingFunction = tracingFunction;
+    Factory(Function<String, SecondarySampling> secondarySamplingFunction,
+      Reporter<zipkin2.Span> reporter) {
+      this.secondarySamplingFunction = secondarySamplingFunction;
+      this.reporter = reporter;
+    }
+
+    HttpTracing httpTracing(String localServiceName) {
+      SecondarySampling secondarySampling = secondarySamplingFunction.apply(localServiceName);
+      Tracing.Builder tracingBuilder = Tracing.newBuilder()
+        .localServiceName(localServiceName)
+        .propagationFactory(B3SinglePropagation.FACTORY)
+        .spanReporter(reporter);
+      if (secondarySampling != null) secondarySampling.customize(tracingBuilder);
+      Tracing tracing = tracingBuilder.build();
+
+      HttpTracing.Builder httpTracingBuilder = HttpTracing.newBuilder(tracing);
+      if (secondarySampling != null) secondarySampling.customize(httpTracingBuilder);
+      return httpTracingBuilder.build();
     }
 
     TracedNode create(String serviceName) {
-      return new TracedNode(serviceName, tracingFunction, (endpoint, remoteServiceName) -> true);
+      return new TracedNode(serviceName, httpTracing(serviceName), (e, r) -> true);
     }
 
     TracedNode create(String serviceName, BiPredicate<String, String> routeFunction) {
-      return new TracedNode(serviceName, tracingFunction, routeFunction);
+      return new TracedNode(serviceName, httpTracing(serviceName), routeFunction);
     }
   }
 
@@ -86,13 +108,11 @@ class TracedNode {
   final HttpClientHandler<HttpClientRequest, HttpClientResponse> clientHandler;
   final HttpServerHandler<HttpServerRequest, HttpServerResponse> serverHandler;
 
-  TracedNode(String localServiceName, Function<String, Tracing> tracingFunction,
+  TracedNode(String localServiceName, HttpTracing httpTracing,
     BiPredicate<String, String> routeFunction) {
     this.localServiceName = localServiceName;
     this.routeFunction = routeFunction;
-    Tracing tracing = tracingFunction.apply(localServiceName);
-    this.current = tracing.currentTraceContext();
-    HttpTracing httpTracing = HttpTracing.create(tracingFunction.apply(localServiceName));
+    this.current = httpTracing.tracing().currentTraceContext();
     this.serverHandler = HttpServerHandler.create(httpTracing);
     this.clientHandler = HttpClientHandler.create(httpTracing);
   }
