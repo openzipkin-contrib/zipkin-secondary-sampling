@@ -13,6 +13,9 @@
  */
 package brave.secondary_sampling;
 
+import brave.http.HttpRequestSampler;
+import brave.http.HttpRuleSampler;
+import brave.http.HttpServerRequest;
 import brave.sampler.RateLimitingSampler;
 import brave.sampler.Sampler;
 import java.util.LinkedHashMap;
@@ -28,11 +31,19 @@ public final class TestSecondarySampler {
     }
 
     Mode mode = Mode.ACTIVE;
-    Sampler sampler = Sampler.ALWAYS_SAMPLE;
+    HttpRequestSampler sampler = HttpRequestSampler.ALWAYS_SAMPLE;
     int ttl = 0; // zero means don't add ttl
 
     public Trigger rps(int rps) {
-      this.sampler = RateLimitingSampler.create(rps);
+      Sampler rateLimiter = RateLimitingSampler.create(rps);
+      this.sampler = httpRequest -> rateLimiter.isSampled(0L);
+      return this;
+    }
+
+    public Trigger rps(String path, int rps) {
+      this.sampler = HttpRuleSampler.newBuilder()
+        .addRuleWithRate(null, path, rps)
+        .build();
       return this;
     }
 
@@ -46,8 +57,9 @@ public final class TestSecondarySampler {
       return this;
     }
 
-    public boolean isSampled() {
-      return sampler.isSampled(0L);
+    public boolean isSampled(Object request) {
+      if (!(request instanceof HttpServerRequest)) return false; // only sample server side
+      return Boolean.TRUE.equals(sampler.trySample((HttpServerRequest) request));
     }
 
     public int ttl() {
@@ -65,7 +77,7 @@ public final class TestSecondarySampler {
   }
 
   public SecondarySampler forService(String serviceName) {
-    return (state) -> {
+    return (request, state) -> {
       Trigger trigger = getByService(state.samplingKey()).get(serviceName);
       if (trigger == null) trigger = allServices.get(state.samplingKey());
       if (trigger == null) return false;
@@ -76,7 +88,7 @@ public final class TestSecondarySampler {
         return state.parameter("spanId") != null;
       }
 
-      boolean sampled = trigger.isSampled();
+      boolean sampled = trigger.isSampled(request);
       if (sampled) state.ttl(trigger.ttl()); // Set any TTL
       return sampled;
     };

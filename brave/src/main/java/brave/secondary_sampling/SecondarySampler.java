@@ -13,6 +13,8 @@
  */
 package brave.secondary_sampling;
 
+import brave.http.HttpRequest;
+import brave.http.HttpRuleSampler;
 import brave.propagation.TraceContext;
 
 /**
@@ -51,16 +53,38 @@ public interface SecondarySampler {
    *
    * <p>Here's an example of evaluating participation based on a configured service name.
    * <pre>{@code
-   * return (state) -> isSampled(state.samplingKey(), localServiceName());
+   * return (request, state) -> isSampled(state.samplingKey(), localServiceName());
    * }</pre>
    *
-   * <p><h3>The state argument</h3>
+   * <p>Here's an example that uses http request properties along with the key.
+   * <pre>{@code
+   * // Assume an initialized HTTP sampler exists
+   * samplers.put("play", HttpRuleSampler.newBuilder()
+   *   .addRuleWithRate("GET", "/play", 100) // requests per second
+   *   .build());
+   *
+   * // The secondary sampler can leverage this
+   * return (request, state) -> {
+   *   if (!(request instanceof HttpServerRequest)) return false; // only sample server side
+   *   HttpRequestSampler sampler = samplers.get(state.samplingKey());
+   *   if (sampler == null) return false; // key isn't configured
+   *   return Boolean.TRUE.equals(sampler.trySample((HttpServerRequest) request));
+   * };
+   * }</pre>
+   *
+   * <p><h3>The request parameter</h3></p>
+   * The request parameter may be an {@link HttpRequest}, which would allow implementation with
+   * tools like {@link HttpRuleSampler}. However, the request could also be non-HTTP. For example,
+   * it could be a gRPC or messaging request.
+   *
+   * <p><h3>The state parameter</h3>
    * Simple use cases will only read {@link MutableSecondarySamplingState#samplingKey()}. This
    * argument is present to allow reading other parameters or refreshing a {@link
    * MutableSecondarySamplingState#ttl(int)}.
    *
-   * @param state state extracted from propagated fields for this sampling key.
+   * @param request incoming request
+   * @param state a sampling key associated with the request, and any parameters attached to it.
    * @return true if the {@link MutableSecondarySamplingState#samplingKey()} is sampled.
    */
-  boolean isSampled(MutableSecondarySamplingState state);
+  boolean isSampled(Object request, MutableSecondarySamplingState state);
 }
