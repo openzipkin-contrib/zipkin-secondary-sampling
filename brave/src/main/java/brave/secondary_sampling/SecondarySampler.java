@@ -60,7 +60,7 @@ public interface SecondarySampler {
    * <pre>{@code
    * // Assume an initialized HTTP sampler exists
    * samplers.put("play", HttpRuleSampler.newBuilder()
-   *   .addRule("GET", "/play", 100) // requests per second
+   *   .addRuleWithRate("GET", "/play", 100) // requests per second
    *   .build());
    *
    * // The secondary sampler can leverage this
