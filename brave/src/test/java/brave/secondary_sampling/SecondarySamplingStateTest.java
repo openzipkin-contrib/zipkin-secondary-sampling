@@ -51,7 +51,7 @@ public class SecondarySamplingStateTest {
   FakeRequest.Server serverRequest = new FakeRequest.Server();
 
   @Test public void extract_samplesLocalWhenConfigured() {
-    // base case: links is configured, authcache is not. authcache is in the serverRequest, though!
+    // base case: links is configured, authcache is not. authcache is in the sampling header, though!
     sampler.addTrigger("links", new Trigger());
 
     serverRequest.header("b3", "0");
@@ -82,7 +82,7 @@ public class SecondarySamplingStateTest {
 
   /** This shows an example of dynamic configuration */
   @Test public void dynamicConfiguration() {
-    // base case: links is configured, authcache is not. authcache is in the serverRequest, though!
+    // base case: links is configured, authcache is not. authcache is in the sampling header, though!
     sampler.addTrigger("links", new Trigger());
 
     serverRequest.header("b3", "0");
