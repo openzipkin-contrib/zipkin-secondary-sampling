@@ -42,7 +42,7 @@ public final class TestSecondarySampler {
 
     public Trigger rps(String path, int rps) {
       this.sampler = HttpRuleSampler.newBuilder()
-        .addRule(null, path, rps)
+        .addRuleWithRate(null, path, rps)
         .build();
       return this;
     }
