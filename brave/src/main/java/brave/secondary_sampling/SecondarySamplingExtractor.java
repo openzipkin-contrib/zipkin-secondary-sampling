@@ -33,7 +33,7 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
   SecondarySamplingExtractor(SecondarySampling.Propagation<K> propagation, Getter<C, K> getter) {
     this.delegate = propagation.delegate.extractor(getter);
     this.getter = getter;
-    this.sampler = propagation.secondarySampling.sampler;
+    this.sampler = propagation.secondarySampling.secondarySampler;
     this.samplingKey = propagation.samplingKey;
   }
 

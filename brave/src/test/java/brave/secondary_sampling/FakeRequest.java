@@ -31,7 +31,7 @@ final class FakeRequest {
     }
 
     @Override public String path() {
-      return null;
+      return "/";
     }
 
     @Override public String url() {
@@ -59,7 +59,7 @@ final class FakeRequest {
     }
 
     @Override public String path() {
-      return null;
+      return "/";
     }
 
     @Override public String url() {
