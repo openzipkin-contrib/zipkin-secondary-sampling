@@ -14,10 +14,10 @@
 package brave.secondary_sampling;
 
 import brave.http.HttpRequest;
-import brave.http.HttpRequestSampler;
 import brave.http.HttpRuleSampler;
 import brave.sampler.Matcher;
 import brave.sampler.Sampler;
+import brave.sampler.SamplerFunction;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -29,7 +29,7 @@ import static brave.unmerged.MoreMatchers.ifInstanceOf;
  * sampling rules.
  */
 public interface SamplerController {
-  HttpRequestSampler primaryHttpSampler(String serviceName);
+  SamplerFunction<HttpRequest> primaryHttpSampler(String serviceName);
 
   SecondarySampler secondarySampler(String serviceName);
 
@@ -67,8 +67,8 @@ public interface SamplerController {
     final Map<String, Map<String, SecondarySampler>> secondaryRulesByService =
       new LinkedHashMap<>();
 
-    @Override public HttpRequestSampler primaryHttpSampler(String serviceName) {
-      return new HttpRequestSampler() { // defer evaluation so dynamic changes are visible
+    @Override public SamplerFunction<HttpRequest> primaryHttpSampler(String serviceName) {
+      return new SamplerFunction<HttpRequest>() { // defer evaluation so dynamic changes are visible
         @Override public Boolean trySample(HttpRequest httpRequest) {
           HttpRuleSampler primarySampler = primarySamplers.get(serviceName);
           return primarySampler != null ? primarySampler.trySample(httpRequest) : null;

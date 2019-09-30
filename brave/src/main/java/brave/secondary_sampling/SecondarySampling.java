@@ -15,7 +15,7 @@ package brave.secondary_sampling;
 
 import brave.Tracing;
 import brave.TracingCustomizer;
-import brave.http.HttpRequestSampler;
+import brave.http.HttpRequest;
 import brave.http.HttpTracing;
 import brave.http.HttpTracingCustomizer;
 import brave.internal.MapPropagationFields;
@@ -24,6 +24,7 @@ import brave.internal.PropagationFieldsFactory;
 import brave.propagation.Propagation;
 import brave.propagation.Propagation.KeyFactory;
 import brave.propagation.TraceContext;
+import brave.sampler.SamplerFunction;
 import java.util.List;
 import java.util.Locale;
 
@@ -42,7 +43,7 @@ public final class SecondarySampling
   public static final class Builder {
     String fieldName = "sampling", tagName = "sampled_keys";
     Propagation.Factory propagationFactory;
-    @Nullable HttpRequestSampler httpServerSampler;
+    @Nullable SamplerFunction<HttpRequest> httpServerSampler;
     SecondarySampler secondarySampler;
 
     /** Optional: The ascii lowercase propagation field name to use. Defaults to {@code sampling}. */
@@ -69,20 +70,20 @@ public final class SecondarySampling
     }
 
     /**
-     * Optional: This will override what is passed to {@link HttpTracing.Builder#serverSampler(HttpRequestSampler)}
+     * Optional: This will override what is passed to {@link HttpTracing.Builder#serverSampler(SamplerFunction)}
      *
      * <p>This controls the primary sampling mechanism for HTTP server requests. This control is
      * present here for convenience only, as it can be done externally with {@link
      * HttpTracingCustomizer}.
      */
-    public Builder httpServerSampler(HttpRequestSampler httpServerSampler) {
+    public Builder httpServerSampler(SamplerFunction<HttpRequest> httpServerSampler) {
       if (httpServerSampler == null) throw new NullPointerException("httpServerSampler == null");
       this.httpServerSampler = httpServerSampler;
       return this;
     }
 
     /**
-     * Required: Performs secondary sampling before {@link #httpServerSampler(HttpRequestSampler)
+     * Required: Performs secondary sampling before {@link #httpServerSampler(SamplerFunction)
      * primary occurs}.
      */
     public Builder secondarySampler(SecondarySampler secondarySampler) {
@@ -103,7 +104,7 @@ public final class SecondarySampling
 
   final String fieldName, tagName;
   final Propagation.Factory delegate;
-  @Nullable final HttpRequestSampler httpServerSampler;
+  @Nullable final SamplerFunction<HttpRequest> httpServerSampler;
   final SecondarySampler secondarySampler;
 
   SecondarySampling(Builder builder) {
