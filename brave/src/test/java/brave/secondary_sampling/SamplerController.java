@@ -18,6 +18,7 @@ import brave.http.HttpRequestSampler;
 import brave.http.HttpRuleSampler;
 import brave.sampler.Matcher;
 import brave.sampler.Sampler;
+import brave.sampler.SamplerFunction;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -25,8 +26,14 @@ import static brave.secondary_sampling.SecondarySamplers.active;
 import static brave.unmerged.MoreMatchers.ifInstanceOf;
 
 /**
- * This customizes a {@link SecondarySampling} instance with primary (B3) and secondary HTTP
- * sampling rules.
+ * This is a proof-of-concept controller for configuring the {@link SecondarySampling} instance with
+ * primary (B3) and secondary HTTP sampling rules.
+ *
+ * <p>Real sites may have different needs. For example, their configuration may be backed by rules
+ * that are not service name in nature. This proves the concept that from a library point-of-view,
+ * the types needed to configure {@link SamplerFunction sampler functions} can be used in different
+ * scopes. For example, this shows that generic functions (accepting Object) can be mixed with
+ * narrow ones (like http and rpc).
  */
 public interface SamplerController {
   HttpRequestSampler primaryHttpSampler(String serviceName);
@@ -58,7 +65,7 @@ public interface SamplerController {
 
   SamplerController removeSecondaryRules(String samplingKey);
 
-  // implementation is nested only to keep the imporant methods at the top of the file
+  // implementation is nested only to keep the important methods at the top of the file
   final class Default implements SamplerController {
     final Map<String, HttpRuleSampler> primarySamplers = new LinkedHashMap<>();
 
