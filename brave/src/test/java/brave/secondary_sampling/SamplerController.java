@@ -14,8 +14,9 @@
 package brave.secondary_sampling;
 
 import brave.http.HttpRequest;
-import brave.http.HttpRequestSampler;
 import brave.http.HttpRuleSampler;
+import brave.rpc.RpcRequest;
+import brave.rpc.RpcRuleSampler;
 import brave.sampler.Matcher;
 import brave.sampler.Sampler;
 import brave.sampler.SamplerFunction;
@@ -36,13 +37,20 @@ import static brave.unmerged.MoreMatchers.ifInstanceOf;
  * narrow ones (like http and rpc).
  */
 public interface SamplerController {
-  HttpRequestSampler primaryHttpSampler(String serviceName);
+  SamplerFunction<HttpRequest> primaryHttpSampler(String serviceName);
+
+  SamplerFunction<RpcRequest> primaryRpcSampler(String serviceName);
 
   SecondarySampler secondarySampler(String serviceName);
 
   SamplerController putPrimaryHttpRule(
     String serviceName, /* only arg different is lack of sampling key */
     Matcher<HttpRequest> matcher, Sampler sampler
+  );
+
+  SamplerController putPrimaryRpcRule(
+    String serviceName, /* only arg different is lack of sampling key */
+    Matcher<RpcRequest> matcher, Sampler sampler
   );
 
   // This shows you can do primary and secondary policy in the same type with the same matchers.
@@ -58,6 +66,19 @@ public interface SamplerController {
     );
   }
 
+  // This shows you can do primary and secondary policy in the same type with the same matchers.
+  default SamplerController putSecondaryRpcRule(
+    String serviceName, String samplingKey,
+    Matcher<RpcRequest> matcher, Sampler sampler, int ttl
+  ) {
+    return putSecondaryRule(
+      serviceName, samplingKey,
+      // active means don't inherit a decision.
+      // Secondary samplers can pass any request, so we guard narrower types with isInstanceOf
+      active(ifInstanceOf(RpcRequest.class, matcher), sampler, ttl)
+    );
+  }
+
   SamplerController putSecondaryRule(String samplingKey, SecondarySampler sampler);
 
   SamplerController putSecondaryRule(String serviceName, String samplingKey,
@@ -67,18 +88,28 @@ public interface SamplerController {
 
   // implementation is nested only to keep the important methods at the top of the file
   final class Default implements SamplerController {
-    final Map<String, HttpRuleSampler> primarySamplers = new LinkedHashMap<>();
+    final Map<String, HttpRuleSampler> primaryHttpSamplers = new LinkedHashMap<>();
+    final Map<String, RpcRuleSampler> primaryRpcSamplers = new LinkedHashMap<>();
 
     /** Secondary sampling rules are pushed by config management to all nodes, looked up by key */
     final Map<String, SecondarySampler> secondaryRules = new LinkedHashMap<>();
     final Map<String, Map<String, SecondarySampler>> secondaryRulesByService =
       new LinkedHashMap<>();
 
-    @Override public HttpRequestSampler primaryHttpSampler(String serviceName) {
-      return new HttpRequestSampler() { // defer evaluation so dynamic changes are visible
+    @Override public SamplerFunction<HttpRequest> primaryHttpSampler(String serviceName) {
+      return new SamplerFunction<HttpRequest>() { // defer evaluation so dynamic changes are visible
         @Override public Boolean trySample(HttpRequest httpRequest) {
-          HttpRuleSampler primarySampler = primarySamplers.get(serviceName);
+          HttpRuleSampler primarySampler = primaryHttpSamplers.get(serviceName);
           return primarySampler != null ? primarySampler.trySample(httpRequest) : null;
+        }
+      };
+    }
+
+    @Override public SamplerFunction<RpcRequest> primaryRpcSampler(String serviceName) {
+      return new SamplerFunction<RpcRequest>() { // defer evaluation so dynamic changes are visible
+        @Override public Boolean trySample(RpcRequest rpcRequest) {
+          RpcRuleSampler primarySampler = primaryRpcSamplers.get(serviceName);
+          return primarySampler != null ? primarySampler.trySample(rpcRequest) : null;
         }
       };
     }
@@ -96,8 +127,19 @@ public interface SamplerController {
     public SamplerController putPrimaryHttpRule(String serviceName, Matcher<HttpRequest> matcher,
       Sampler sampler) {
       HttpRuleSampler primarySampler =
-        primarySamplers.getOrDefault(serviceName, HttpRuleSampler.newBuilder().build());
-      primarySamplers.put(serviceName, HttpRuleSampler.newBuilder()
+        primaryHttpSamplers.getOrDefault(serviceName, HttpRuleSampler.newBuilder().build());
+      primaryHttpSamplers.put(serviceName, HttpRuleSampler.newBuilder()
+        .putAllRules(primarySampler)
+        .putRule(matcher, sampler).build());
+      return this;
+    }
+
+    @Override
+    public SamplerController putPrimaryRpcRule(String serviceName, Matcher<RpcRequest> matcher,
+      Sampler sampler) {
+      RpcRuleSampler primarySampler =
+        primaryRpcSamplers.getOrDefault(serviceName, RpcRuleSampler.newBuilder().build());
+      primaryRpcSamplers.put(serviceName, RpcRuleSampler.newBuilder()
         .putAllRules(primarySampler)
         .putRule(matcher, sampler).build());
       return this;

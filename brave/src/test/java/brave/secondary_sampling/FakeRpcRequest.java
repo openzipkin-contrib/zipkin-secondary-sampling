@@ -13,68 +13,71 @@
  */
 package brave.secondary_sampling;
 
-import brave.http.HttpClientRequest;
-import brave.http.HttpServerRequest;
+import brave.rpc.RpcClientRequest;
+import brave.rpc.RpcServerRequest;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-final class FakeRequest {
-  static final class Client extends HttpClientRequest {
-    Map<String, String> headers = new LinkedHashMap<>();
+public final class FakeRpcRequest {
+  public static final class Client extends RpcClientRequest {
+    final String method;
+    final Map<String, String> headers = new LinkedHashMap<>();
+
+    public Client(String method) {
+      this.method = method;
+    }
 
     @Override public Object unwrap() {
       return this;
     }
 
-    @Override public String method() {
+    @Override public String service() {
       return null;
-    }
-
-    @Override public String path() {
-      return "/";
-    }
-
-    @Override public String url() {
-      return null;
-    }
-
-    @Override public void header(String name, String value) {
-      headers.put(name, value);
-    }
-
-    @Override public String header(String name) {
-      return headers.get(name);
-    }
-  }
-
-  static final class Server extends HttpServerRequest {
-    Map<String, String> headers = new LinkedHashMap<>();
-
-    @Override public Object unwrap() {
-      return this;
     }
 
     @Override public String method() {
-      return null;
-    }
-
-    @Override public String path() {
-      return "/";
-    }
-
-    @Override public String url() {
-      return null;
+      return method;
     }
 
     public void header(String name, String value) {
       headers.put(name, value);
     }
 
-    @Override public String header(String name) {
+    public String header(String name) {
       return headers.get(name);
     }
   }
 
-  private FakeRequest() {
+  public static final class Server extends RpcServerRequest {
+    final String method;
+    final Map<String, String> headers;
+
+    public Server(Client incoming) {
+      this.method = incoming.method;
+      this.headers = new LinkedHashMap<>(incoming.headers);
+    }
+
+    @Override public Object unwrap() {
+      return this;
+    }
+
+    @Override public String service() {
+      return method;
+    }
+
+    @Override public String method() {
+      return method;
+    }
+
+    public void header(String name, String value) {
+      headers.put(name, value);
+    }
+
+    public String header(String name) {
+      return headers.get(name);
+    }
+  }
+
+  private FakeRpcRequest() {
   }
 }

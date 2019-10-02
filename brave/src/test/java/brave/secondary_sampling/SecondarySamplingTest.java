@@ -41,38 +41,39 @@ public class SecondarySamplingTest {
   SecondarySampling secondarySampling = SecondarySampling.newBuilder()
     .propagationFactory(B3SinglePropagation.FACTORY)
     .httpServerSampler(sampler.primaryHttpSampler(serviceName))
+    .rpcServerSampler(sampler.primaryRpcSampler(serviceName))
     .secondarySampler(sampler.secondarySampler(serviceName))
     .build();
 
   Propagation<String> propagation = secondarySampling.create(STRING);
 
-  Extractor<HttpServerRequest> extractor = propagation.extractor(HttpServerRequest::header);
-  Injector<HttpClientRequest> injector = propagation.injector(HttpClientRequest::header);
+  Extractor<HttpServerRequest> httpExtractor = propagation.extractor(HttpServerRequest::header);
+  Injector<HttpClientRequest> httpInjector = propagation.injector(HttpClientRequest::header);
 
-  FakeRequest.Client clientRequest = new FakeRequest.Client();
-  FakeRequest.Server serverRequest = new FakeRequest.Server();
+  FakeHttpRequest.Client clientHttpRequest = new FakeHttpRequest.Client("/play");
+  FakeHttpRequest.Server serverHttpRequest = new FakeHttpRequest.Server(clientHttpRequest);
 
   @Test public void extract_samplesLocalWhenConfigured() {
     // base case: links is configured, authcache is not. authcache is in the serverRequest, though!
     sampler.putSecondaryRule("links", active());
 
-    serverRequest.header("b3", "0");
-    serverRequest.header("sampling", "authcache"); // sampling hint should not trigger
+    serverHttpRequest.header("b3", "0");
+    serverHttpRequest.header("sampling", "authcache"); // sampling hint should not trigger
 
-    assertThat(extractor.extract(serverRequest).sampledLocal()).isFalse();
+    assertThat(httpExtractor.extract(serverHttpRequest).sampledLocal()).isFalse();
 
-    serverRequest.header("b3", "0");
-    serverRequest.header("sampling", "links,authcache;ttl=1"); // links should trigger
+    serverHttpRequest.header("b3", "0");
+    serverHttpRequest.header("sampling", "links,authcache;ttl=1"); // links should trigger
 
-    assertThat(extractor.extract(serverRequest).sampledLocal()).isTrue();
+    assertThat(httpExtractor.extract(serverHttpRequest).sampledLocal()).isTrue();
   }
 
   /** This shows that TTL is applied regardless of sampler */
   @Test public void extract_ttlOverridesSampler() {
-    serverRequest.header("b3", "0");
-    serverRequest.header("sampling", "links,authcache;ttl=1");
+    serverHttpRequest.header("b3", "0");
+    serverHttpRequest.header("sampling", "links,authcache;ttl=1");
 
-    TraceContextOrSamplingFlags extracted = extractor.extract(serverRequest);
+    TraceContextOrSamplingFlags extracted = httpExtractor.extract(serverHttpRequest);
     Extra extra = (Extra) extracted.extra().get(0);
 
     assertThat(extra.toMap())
@@ -87,18 +88,18 @@ public class SecondarySamplingTest {
     // base case: links is configured, authcache is not. authcache is in the serverRequest, though!
     sampler.putSecondaryRule("links", active());
 
-    serverRequest.header("b3", "0");
-    serverRequest.header("sampling", "links,authcache");
+    serverHttpRequest.header("b3", "0");
+    serverHttpRequest.header("sampling", "links,authcache");
 
-    assertThat(extractor.extract(serverRequest).sampledLocal()).isTrue();
+    assertThat(httpExtractor.extract(serverHttpRequest).sampledLocal()).isTrue();
 
     // dynamic configuration removes link processing
     sampler.removeSecondaryRules("links");
-    assertThat(extractor.extract(serverRequest).sampledLocal()).isFalse();
+    assertThat(httpExtractor.extract(serverHttpRequest).sampledLocal()).isFalse();
 
     // dynamic configuration adds authcache processing
     sampler.putSecondaryRule(serviceName, "authcache", active());
-    assertThat(extractor.extract(serverRequest).sampledLocal()).isTrue();
+    assertThat(httpExtractor.extract(serverHttpRequest).sampledLocal()).isTrue();
   }
 
   @Test public void extract_convertsConfiguredRpsToDecision() {
@@ -106,10 +107,10 @@ public class SecondarySamplingTest {
     sampler.putSecondaryRule("links", active());
     sampler.putSecondaryRule("authcache", active(RateLimitingSampler.create(100), 1));
 
-    serverRequest.header("b3", "0");
-    serverRequest.header("sampling", "gatewayplay,links,authcache");
+    serverHttpRequest.header("b3", "0");
+    serverHttpRequest.header("sampling", "gatewayplay,links,authcache");
 
-    TraceContextOrSamplingFlags extracted = extractor.extract(serverRequest);
+    TraceContextOrSamplingFlags extracted = httpExtractor.extract(serverHttpRequest);
     Extra extra = (Extra) extracted.extra().get(0);
 
     assertThat(extra.toMap()).containsOnly(
@@ -123,10 +124,10 @@ public class SecondarySamplingTest {
   }
 
   @Test public void extract_decrementsTtlEvenWhenNotConfigured() {
-    serverRequest.header("b3", "0");
-    serverRequest.header("sampling", "gatewayplay,authcache;ttl=2");
+    serverHttpRequest.header("b3", "0");
+    serverHttpRequest.header("sampling", "gatewayplay,authcache;ttl=2");
 
-    TraceContextOrSamplingFlags extracted = extractor.extract(serverRequest);
+    TraceContextOrSamplingFlags extracted = httpExtractor.extract(serverHttpRequest);
     Extra extra = (Extra) extracted.extra().get(0);
 
     assertThat(extra.toMap())
@@ -148,10 +149,10 @@ public class SecondarySamplingTest {
 
     TraceContext context = TraceContext.newBuilder()
       .traceId(1L).spanId(2L).sampled(false).extra(singletonList(extra)).build();
-    injector.inject(context, clientRequest);
+    httpInjector.inject(context, clientHttpRequest);
 
     // doesn't interfere with keys not sampled.
-    assertThat(clientRequest.header("sampling")).isEqualTo(
+    assertThat(clientHttpRequest.header("sampling")).isEqualTo(
       "gatewayplay;spanId=" + notSpanId + ","
         + "links;spanId=" + context.spanIdString() + ","
         + "authcache;ttl=1;spanId=" + notSpanId);

@@ -26,11 +26,14 @@ import brave.internal.Nullable;
 import brave.propagation.B3SinglePropagation;
 import brave.propagation.CurrentTraceContext;
 import brave.propagation.CurrentTraceContext.Scope;
+import brave.propagation.TraceContextOrSamplingFlags;
+import brave.rpc.RpcTracing;
+import brave.secondary_sampling.FakeHttpRequest;
+import brave.secondary_sampling.FakeHttpResponse;
+import brave.secondary_sampling.FakeRpcRequest;
 import brave.secondary_sampling.SecondarySampling;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
 import zipkin2.reporter.Reporter;
@@ -46,13 +49,13 @@ class TracedNode {
     Reporter<zipkin2.Span> reporter) {
     TracedNode.Factory nodeFactory = new TracedNode.Factory(secondarySamplingFunction, reporter);
     TracedNode gateway = nodeFactory.create("gateway");
-    TracedNode api = nodeFactory.create("api", (endpoint, serviceName) -> {
-      if (serviceName.equals("playback")) return endpoint.equals("/play");
-      if (serviceName.equals("recommendations")) return endpoint.equals("/recommend");
+    TracedNode api = nodeFactory.create("api", (path, serviceName) -> {
+      if (serviceName.equals("playback")) return path.equals("/play");
+      if (serviceName.equals("recommendations")) return path.equals("/recommend");
       return true;
     });
     gateway.addDownStream(api);
-    TracedNode auth = nodeFactory.create("auth");
+    TracedNode auth = nodeFactory.create("auth").asRpc("GetToken");
     api.addDownStream(auth);
     auth.addDownStream(nodeFactory.create("cache").addDownStream(nodeFactory.create("authdb")));
     api.addDownStream(nodeFactory.create("recommendations")
@@ -78,26 +81,37 @@ class TracedNode {
       this.reporter = reporter;
     }
 
-    HttpTracing httpTracing(String localServiceName) {
-      SecondarySampling secondarySampling = secondarySamplingFunction.apply(localServiceName);
+    TracedNode create(String serviceName) {
+      return create(serviceName, (e, r) -> true);
+    }
+
+    TracedNode create(String serviceName, BiPredicate<String, String> routeFunction) {
+      SecondarySampling secondarySampling = secondarySamplingFunction.apply(serviceName);
+      Tracing tracing = tracing(serviceName, secondarySampling);
+      HttpTracing httpTracing = httpTracing(tracing, secondarySampling);
+      RpcTracing rpcTracing = rpcTracing(tracing, secondarySampling);
+      return new TracedNode(serviceName, httpTracing, rpcTracing, routeFunction);
+    }
+
+    Tracing tracing(String serviceName, @Nullable SecondarySampling secondarySampling) {
       Tracing.Builder tracingBuilder = Tracing.newBuilder()
-        .localServiceName(localServiceName)
+        .localServiceName(serviceName)
         .propagationFactory(B3SinglePropagation.FACTORY)
         .spanReporter(reporter);
       if (secondarySampling != null) secondarySampling.customize(tracingBuilder);
-      Tracing tracing = tracingBuilder.build();
+      return tracingBuilder.build();
+    }
 
+    HttpTracing httpTracing(Tracing tracing, @Nullable SecondarySampling secondarySampling) {
       HttpTracing.Builder httpTracingBuilder = HttpTracing.newBuilder(tracing);
       if (secondarySampling != null) secondarySampling.customize(httpTracingBuilder);
       return httpTracingBuilder.build();
     }
 
-    TracedNode create(String serviceName) {
-      return new TracedNode(serviceName, httpTracing(serviceName), (e, r) -> true);
-    }
-
-    TracedNode create(String serviceName, BiPredicate<String, String> routeFunction) {
-      return new TracedNode(serviceName, httpTracing(serviceName), routeFunction);
+    RpcTracing rpcTracing(Tracing tracing, @Nullable SecondarySampling secondarySampling) {
+      RpcTracing.Builder rpcTracingBuilder = RpcTracing.newBuilder(tracing);
+      if (secondarySampling != null) secondarySampling.customize(rpcTracingBuilder);
+      return rpcTracingBuilder.build();
     }
   }
 
@@ -107,14 +121,22 @@ class TracedNode {
   final CurrentTraceContext current;
   final HttpClientHandler<HttpClientRequest, HttpClientResponse> clientHandler;
   final HttpServerHandler<HttpServerRequest, HttpServerResponse> serverHandler;
+  final RpcTracing rpcTracing;
+  String rpcMethod;
+
+  TracedNode asRpc(String method) {
+    rpcMethod = method;
+    return this;
+  }
 
   TracedNode(String localServiceName, HttpTracing httpTracing,
-    BiPredicate<String, String> routeFunction) {
+    RpcTracing rpcTracing, BiPredicate<String, String> routeFunction) {
     this.localServiceName = localServiceName;
     this.routeFunction = routeFunction;
     this.current = httpTracing.tracing().currentTraceContext();
     this.serverHandler = HttpServerHandler.create(httpTracing);
     this.clientHandler = HttpClientHandler.create(httpTracing);
+    this.rpcTracing = rpcTracing;
   }
 
   /** Returns the first node in the service graph with the given name, or null if none match. */
@@ -133,106 +155,80 @@ class TracedNode {
     return this;
   }
 
-  void execute(String path, Map<String, String> headers) {
-    ServerRequest serverRequest = new ServerRequest(path, headers);
+  void execute(FakeHttpRequest.Client clientRequest) {
+    FakeHttpRequest.Server serverRequest = new FakeHttpRequest.Server(clientRequest);
     Span span = serverHandler.handleReceive(serverRequest);
+    callDownstream(serverRequest.path(), span);
+    serverHandler.handleSend(new FakeHttpResponse.Server(), null, span);
+  }
+
+  void execute(FakeRpcRequest.Client clientRequest) {
+    FakeRpcRequest.Server serverRequest = new FakeRpcRequest.Server(clientRequest);
+    Span span = handleRpcServerReceive(serverRequest);
+    callDownstream(clientRequest.method(), span);
+    span.finish();
+  }
+
+  void callDownstream(String endpoint, Span span) {
     try (Scope ws = current.newScope(span.context())) {
       for (TracedNode down : downstream) {
-        if (routeFunction.test(serverRequest.path, down.localServiceName)) {
-          callDownstream(down, serverRequest.path);
+        if (routeFunction.test(endpoint, down.localServiceName)) {
+          if (down.rpcMethod != null) {
+            callDownstreamRpc(down.rpcMethod, down);
+          } else {
+            callDownstreamHttp(endpoint, down);
+          }
         }
       }
     }
-    serverHandler.handleSend(new ServerResponse(), null, span);
   }
 
-  void callDownstream(TracedNode down, String endpoint) {
-    ClientRequest clientRequest = new ClientRequest(endpoint);
+  void callDownstreamHttp(String path, TracedNode down) {
+    FakeHttpRequest.Client clientRequest = new FakeHttpRequest.Client(path);
     Span span = clientHandler.handleSend(clientRequest);
-    down.execute(endpoint, clientRequest.headers);
-    clientHandler.handleReceive(new ClientResponse(), null, span);
+    down.execute(clientRequest);
+    clientHandler.handleReceive(new FakeHttpResponse.Client(), null, span);
   }
 
-  static final class ServerRequest extends HttpServerRequest {
-    final String path;
-    final Map<String, String> headers;
-
-    ServerRequest(String path, Map<String, String> headers) {
-      this.path = path;
-      this.headers = headers;
-    }
-
-    @Override public Object unwrap() {
-      return this;
-    }
-
-    @Override public String method() {
-      return "GET";
-    }
-
-    @Override public String path() {
-      return path;
-    }
-
-    @Override public String url() {
-      return null;
-    }
-
-    @Override public String header(String name) {
-      return headers.get(name);
-    }
+  void callDownstreamRpc(String method, TracedNode down) {
+    FakeRpcRequest.Client clientRequest = new FakeRpcRequest.Client(method);
+    Span span = handleRpcClientSend(clientRequest);
+    down.execute(clientRequest);
+    span.finish();
   }
 
-  static final class ServerResponse extends HttpServerResponse {
-    @Override public Object unwrap() {
-      return this;
-    }
-
-    @Override public int statusCode() {
-      return 200;
-    }
+  // remove after https://github.com/openzipkin/brave/pull/999
+  Span handleRpcClientSend(FakeRpcRequest.Client clientRequest) {
+    Span span = rpcTracing.tracing().tracer().nextSpan(rpcTracing.clientSampler(), clientRequest);
+    rpcTracing.tracing()
+      .propagation()
+      .<FakeRpcRequest.Client>injector(FakeRpcRequest.Client::header)
+      .inject(span.context(), clientRequest);
+    span.kind(Span.Kind.CLIENT).name(clientRequest.method());
+    return span.start();
   }
 
-  static final class ClientRequest extends HttpClientRequest {
-    final String path;
-    final Map<String, String> headers = new LinkedHashMap<>();
+  // remove after https://github.com/openzipkin/brave/pull/999
+  Span handleRpcServerReceive(FakeRpcRequest.Server serverRequest) {
+    TraceContextOrSamplingFlags extracted = rpcTracing.tracing().propagation()
+      .<FakeRpcRequest.Server>extractor(FakeRpcRequest.Server::header)
+      .extract(serverRequest);
 
-    ClientRequest(String path) {
-      this.path = path;
+    Boolean sampled = extracted.sampled();
+    // only recreate the context if the rpc sampler made a decision
+    if (sampled == null
+      && (sampled = rpcTracing.serverSampler().trySample(serverRequest)) != null) {
+      extracted = extracted.sampled(sampled.booleanValue());
     }
 
-    @Override public Object unwrap() {
-      return this;
+    Span span;
+    if (extracted.context() != null) {
+      span = rpcTracing.tracing().tracer().joinSpan(extracted.context());
+    } else {
+      span = rpcTracing.tracing().tracer().nextSpan(extracted);
     }
 
-    @Override public String method() {
-      return "GET";
-    }
-
-    @Override public String path() {
-      return path;
-    }
-
-    @Override public String url() {
-      return null;
-    }
-
-    @Override public String header(String name) {
-      return headers.get(name);
-    }
-
-    @Override public void header(String name, String value) {
-      headers.put(name, value);
-    }
-  }
-
-  static final class ClientResponse extends HttpClientResponse {
-    @Override public Object unwrap() {
-      return this;
-    }
-
-    @Override public int statusCode() {
-      return 200;
-    }
+    span.kind(Span.Kind.SERVER).name(serverRequest.method());
+    return span.start();
   }
 }

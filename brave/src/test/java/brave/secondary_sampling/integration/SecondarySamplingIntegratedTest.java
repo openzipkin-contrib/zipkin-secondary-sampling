@@ -18,12 +18,14 @@ import brave.propagation.B3SinglePropagation;
 import brave.propagation.Propagation;
 import brave.sampler.RateLimitingSampler;
 import brave.sampler.Sampler;
+import brave.secondary_sampling.FakeHttpRequest;
 import brave.secondary_sampling.SamplerController;
 import brave.secondary_sampling.SecondarySampling;
 import brave.secondary_sampling.TraceForwarder;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import org.junit.After;
 import org.junit.Test;
 import zipkin2.DependencyLink;
@@ -32,7 +34,7 @@ import zipkin2.reporter.Reporter;
 import zipkin2.storage.InMemoryStorage;
 
 import static brave.http.HttpRequestMatchers.pathStartsWith;
-import static brave.secondary_sampling.SecondarySamplers.active;
+import static brave.rpc.RpcRequestMatchers.methodEquals;
 import static brave.secondary_sampling.SecondarySamplers.passive;
 import static brave.secondary_sampling.TraceForwarder.NOOP_CALLBACK;
 import static java.util.Arrays.asList;
@@ -67,8 +69,8 @@ public class SecondarySamplingIntegratedTest {
     );
 
   SamplerController authcacheSampler = new SamplerController.Default()
-    .putSecondaryRule("auth", "authcache",
-      active(RateLimitingSampler.create(100), 1)
+    .putSecondaryRpcRule("auth", "authcache",
+      methodEquals("GetToken"), RateLimitingSampler.create(100), 1 // ttl
     );
 
   SamplerController allSampler = new SamplerController.Default()
@@ -77,8 +79,8 @@ public class SecondarySamplingIntegratedTest {
     )
     .putSecondaryRule("playback", "gatewayplay",
       passive()
-    ).putSecondaryRule("auth", "authcache",
-      active(RateLimitingSampler.create(100), 1)
+    ).putSecondaryRpcRule("auth", "authcache",
+      methodEquals("GetToken"), RateLimitingSampler.create(100), 1
     );
 
   Function<String, SecondarySampling> configureGatewayPlay = localServiceName ->
@@ -114,11 +116,13 @@ public class SecondarySamplingIntegratedTest {
   @Test public void baseCase_nothingToZipkinWhenB3Unsampled() {
     serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("b3", "0");
+    Stream.of("/recommend", "/play").forEach(path -> {
+        FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
+        request.header("b3", "0");
 
-    serviceRoot.execute("/recommend", headers);
-    serviceRoot.execute("/play", headers);
+        serviceRoot.execute(request);
+      }
+    );
 
     assertThat(zipkin.getTraces()).isEmpty();
     assertThat(gatewayplay.getTraces()).isEmpty();
@@ -128,11 +132,13 @@ public class SecondarySamplingIntegratedTest {
   @Test public void baseCase_reportsToZipkinWhenB3Sampled() {
     serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("b3", "1");
+    Stream.of("/recommend", "/play").forEach(path -> {
+        FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
+        request.header("b3", "1");
 
-    serviceRoot.execute("/recommend", headers);
-    serviceRoot.execute("/play", headers);
+        serviceRoot.execute(request);
+      }
+    );
 
     // Only reports to Zipkin
     assertThat(zipkin.getTraces()).hasSize(2);
@@ -143,10 +149,10 @@ public class SecondarySamplingIntegratedTest {
   @Test public void baseCase_routingToRecommendations() throws Exception { // sanity check
     serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("b3", "1");
+    FakeHttpRequest.Client request = new FakeHttpRequest.Client("/recommend");
+    request.header("b3", "1");
 
-    serviceRoot.execute("/recommend", headers);
+    serviceRoot.execute(request);
 
     // Does not accidentally call playback services
     assertThat(zipkin.getServiceNames().execute())
@@ -156,10 +162,10 @@ public class SecondarySamplingIntegratedTest {
   @Test public void baseCase_routingToPlayback() throws Exception { // sanity check
     serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("b3", "1");
+    FakeHttpRequest.Client request = new FakeHttpRequest.Client("/play");
+    request.header("b3", "1");
 
-    serviceRoot.execute("/play", headers);
+    serviceRoot.execute(request);
 
     // Does not accidentally call recommendations services
     assertThat(zipkin.getServiceNames().execute()).containsExactly(
@@ -179,11 +185,13 @@ public class SecondarySamplingIntegratedTest {
   @Test public void baseCase_b3_unsampled() { // sanity check
     serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("b3", "0");
+    Stream.of("/recommend", "/play").forEach(path -> {
+        FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
+        request.header("b3", "0");
 
-    serviceRoot.execute("/recommend", headers);
-    serviceRoot.execute("/play", headers);
+        serviceRoot.execute(request);
+      }
+    );
 
     assertThat(zipkin.getDependencies()).isEmpty();
     assertThat(gatewayplay.getDependencies()).isEmpty();
@@ -195,11 +203,13 @@ public class SecondarySamplingIntegratedTest {
 
     gatewayplaySampler.putPrimaryHttpRule("gateway", pathStartsWith("/"), Sampler.NEVER_SAMPLE);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("sampling", "gatewayplay");
+    Stream.of("/recommend", "/play").forEach(path -> {
+        FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
+        request.header("sampling", "gatewayplay");
 
-    serviceRoot.execute("/recommend", headers);
-    serviceRoot.execute("/play", headers);
+        serviceRoot.execute(request);
+      }
+    );
 
     assertThat(zipkin.getDependencies()).isEmpty();
     assertThat(gatewayplay.getDependencies()).containsExactly(
@@ -208,7 +218,10 @@ public class SecondarySamplingIntegratedTest {
     assertThat(authcache.getDependencies()).isEmpty();
 
     // Hit playback directly as opposed to via the gateway. This should not increase the trace count
-    serviceRoot.findDownStream("playback").execute("/play", headers);
+    FakeHttpRequest.Client request = new FakeHttpRequest.Client("/play");
+    request.header("sampling", "gatewayplay");
+
+    serviceRoot.findDownStream("playback").execute(request);
     assertThat(gatewayplay.getTraces()).hasSize(1);
   }
 
@@ -220,8 +233,13 @@ public class SecondarySamplingIntegratedTest {
     Map<String, String> headers = new LinkedHashMap<>();
     headers.put("sampling", "gatewayplay");
 
-    serviceRoot.execute("/recommend", headers);
-    serviceRoot.execute("/play", headers);
+    Stream.of("/recommend", "/play").forEach(path -> {
+        FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
+        request.header("sampling", "gatewayplay");
+
+        serviceRoot.execute(request);
+      }
+    );
 
     assertThat(zipkin.getDependencies()).isNotEmpty();
     assertThat(gatewayplay.getDependencies()).containsExactly( // doesn't double-count!
@@ -235,11 +253,13 @@ public class SecondarySamplingIntegratedTest {
 
     authcacheSampler.putPrimaryHttpRule("gateway", pathStartsWith("/"), Sampler.NEVER_SAMPLE);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("sampling", "authcache");
+    Stream.of("/recommend", "/play").forEach(path -> {
+        FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
+        request.header("sampling", "authcache");
 
-    serviceRoot.execute("/recommend", headers);
-    serviceRoot.execute("/play", headers);
+        serviceRoot.execute(request);
+      }
+    );
 
     assertThat(zipkin.getDependencies()).isEmpty();
     assertThat(gatewayplay.getDependencies()).isEmpty();
@@ -253,11 +273,13 @@ public class SecondarySamplingIntegratedTest {
 
     authcacheSampler.putPrimaryHttpRule("gateway", pathStartsWith("/"), Sampler.ALWAYS_SAMPLE);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("sampling", "authcache");
+    Stream.of("/recommend", "/play").forEach(path -> {
+        FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
+        request.header("sampling", "authcache");
 
-    serviceRoot.execute("/recommend", headers);
-    serviceRoot.execute("/play", headers);
+        serviceRoot.execute(request);
+      }
+    );
 
     assertThat(zipkin.getDependencies()).isNotEmpty();
     assertThat(gatewayplay.getDependencies()).isEmpty();
@@ -271,11 +293,13 @@ public class SecondarySamplingIntegratedTest {
 
     allSampler.putPrimaryHttpRule("gateway", pathStartsWith("/"), Sampler.NEVER_SAMPLE);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("sampling", "gatewayplay,authcache");
+    Stream.of("/recommend", "/play").forEach(path -> {
+        FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
+        request.header("sampling", "gatewayplay,authcache");
 
-    serviceRoot.execute("/recommend", headers);
-    serviceRoot.execute("/play", headers);
+        serviceRoot.execute(request);
+      }
+    );
 
     assertThat(zipkin.getDependencies()).isEmpty();
     assertThat(gatewayplay.getDependencies()).containsExactly(
@@ -291,11 +315,13 @@ public class SecondarySamplingIntegratedTest {
 
     allSampler.putPrimaryHttpRule("gateway", pathStartsWith("/"), Sampler.ALWAYS_SAMPLE);
 
-    Map<String, String> headers = new LinkedHashMap<>();
-    headers.put("sampling", "gatewayplay,authcache");
+    Stream.of("/recommend", "/play").forEach(path -> {
+        FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
+        request.header("sampling", "gatewayplay,authcache");
 
-    serviceRoot.execute("/recommend", headers);
-    serviceRoot.execute("/play", headers);
+        serviceRoot.execute(request);
+      }
+    );
 
     assertThat(zipkin.getDependencies()).isNotEmpty();
     assertThat(gatewayplay.getDependencies()).containsExactly( // doesn't double-count!

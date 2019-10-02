@@ -108,6 +108,12 @@
         <artifactId>brave-instrumentation-http-tests</artifactId>
         <version>${brave.version}</version>
       </dependency>
+
+      <dependency>
+        <groupId>${brave.groupId}</groupId>
+        <artifactId>brave-instrumentation-rpc</artifactId>
+        <version>${brave.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 

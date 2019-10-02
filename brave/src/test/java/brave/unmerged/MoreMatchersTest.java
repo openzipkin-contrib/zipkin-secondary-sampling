@@ -31,6 +31,12 @@ public class MoreMatchersTest {
     assertThat(neverMatch().matches(null)).isFalse();
   }
 
+  @Test public void cast() {
+    Matcher<Object> matchesObject = o -> true;
+    Matcher<String> matchesString = MoreMatchers.cast(matchesObject);
+    assertThat(matchesString).isSameAs(matchesObject);
+  }
+
   @Test public void ifInstanceOf_matched() {
     Matcher<String> matchesString = v -> true;
     Matcher<Object> matchesObject = MoreMatchers.ifInstanceOf(String.class, matchesString);

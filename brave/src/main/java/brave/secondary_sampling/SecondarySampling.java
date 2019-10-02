@@ -15,7 +15,7 @@ package brave.secondary_sampling;
 
 import brave.Tracing;
 import brave.TracingCustomizer;
-import brave.http.HttpRequestSampler;
+import brave.http.HttpRequest;
 import brave.http.HttpTracing;
 import brave.http.HttpTracingCustomizer;
 import brave.internal.MapPropagationFields;
@@ -24,6 +24,10 @@ import brave.internal.PropagationFieldsFactory;
 import brave.propagation.Propagation;
 import brave.propagation.Propagation.KeyFactory;
 import brave.propagation.TraceContext;
+import brave.rpc.RpcRequest;
+import brave.rpc.RpcTracing;
+import brave.rpc.RpcTracingCustomizer;
+import brave.sampler.SamplerFunction;
 import java.util.List;
 import java.util.Locale;
 
@@ -32,7 +36,8 @@ import java.util.Locale;
  * Sampling</a> proof of concept.
  */
 public final class SecondarySampling
-  extends Propagation.Factory implements TracingCustomizer, HttpTracingCustomizer {
+  extends Propagation.Factory
+  implements TracingCustomizer, HttpTracingCustomizer, RpcTracingCustomizer {
   static final ExtraFactory EXTRA_FACTORY = new ExtraFactory();
 
   public static Builder newBuilder() {
@@ -42,7 +47,8 @@ public final class SecondarySampling
   public static final class Builder {
     String fieldName = "sampling", tagName = "sampled_keys";
     Propagation.Factory propagationFactory;
-    @Nullable HttpRequestSampler httpServerSampler;
+    @Nullable SamplerFunction<HttpRequest> httpServerSampler;
+    @Nullable SamplerFunction<RpcRequest> rpcServerSampler;
     SecondarySampler secondarySampler;
 
     /** Optional: The ascii lowercase propagation field name to use. Defaults to {@code sampling}. */
@@ -69,20 +75,33 @@ public final class SecondarySampling
     }
 
     /**
-     * Optional: This will override what is passed to {@link HttpTracing.Builder#serverSampler(HttpRequestSampler)}
+     * Optional: This will override what is passed to {@link HttpTracing.Builder#serverSampler(SamplerFunction)}
      *
      * <p>This controls the primary sampling mechanism for HTTP server requests. This control is
      * present here for convenience only, as it can be done externally with {@link
      * HttpTracingCustomizer}.
      */
-    public Builder httpServerSampler(HttpRequestSampler httpServerSampler) {
+    public Builder httpServerSampler(SamplerFunction<HttpRequest> httpServerSampler) {
       if (httpServerSampler == null) throw new NullPointerException("httpServerSampler == null");
       this.httpServerSampler = httpServerSampler;
       return this;
     }
 
     /**
-     * Required: Performs secondary sampling before {@link #httpServerSampler(HttpRequestSampler)
+     * Optional: This will override what is passed to {@link RpcTracing.Builder#serverSampler(SamplerFunction)}
+     *
+     * <p>This controls the primary sampling mechanism for RPC server requests. This control is
+     * present here for convenience only, as it can be done externally with {@link
+     * RpcTracingCustomizer}.
+     */
+    public Builder rpcServerSampler(SamplerFunction<RpcRequest> rpcServerSampler) {
+      if (rpcServerSampler == null) throw new NullPointerException("rpcServerSampler == null");
+      this.rpcServerSampler = rpcServerSampler;
+      return this;
+    }
+
+    /**
+     * Required: Performs secondary sampling before {@link #httpServerSampler(SamplerFunction)
      * primary occurs}.
      */
     public Builder secondarySampler(SecondarySampler secondarySampler) {
@@ -103,7 +122,10 @@ public final class SecondarySampling
 
   final String fieldName, tagName;
   final Propagation.Factory delegate;
-  @Nullable final HttpRequestSampler httpServerSampler;
+  // TODO: it may be possible to make a parameterized primary sampler that just checks the input
+  // type instead of having a separate type for http, rpc etc.
+  @Nullable final SamplerFunction<HttpRequest> httpServerSampler;
+  @Nullable final SamplerFunction<RpcRequest> rpcServerSampler;
   final SecondarySampler secondarySampler;
 
   SecondarySampling(Builder builder) {
@@ -111,6 +133,7 @@ public final class SecondarySampling
     this.tagName = builder.tagName;
     this.delegate = builder.propagationFactory;
     this.httpServerSampler = builder.httpServerSampler;
+    this.rpcServerSampler = builder.rpcServerSampler;
     this.secondarySampler = builder.secondarySampler;
   }
 
@@ -140,6 +163,10 @@ public final class SecondarySampling
 
   @Override public void customize(HttpTracing.Builder builder) {
     if (httpServerSampler != null) builder.serverSampler(httpServerSampler);
+  }
+
+  @Override public void customize(RpcTracing.Builder builder) {
+    if (rpcServerSampler != null) builder.serverSampler(rpcServerSampler);
   }
 
   static final class ExtraFactory
