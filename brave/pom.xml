@@ -43,6 +43,11 @@
 
     <dependency>
       <groupId>${brave.groupId}</groupId>
+      <artifactId>brave-instrumentation-rpc</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>${brave.groupId}</groupId>
       <artifactId>brave-instrumentation-http-tests</artifactId>
       <scope>test</scope>
     </dependency>
