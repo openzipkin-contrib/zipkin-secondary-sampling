@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * This is a <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">Secondary
@@ -49,6 +50,14 @@ public final class SecondarySampling
   public static final class Builder {
     String fieldName = "sampling", tagName = "sampled_keys";
     Propagation.Factory propagationFactory;
+    SecondaryProvisioner provisioner = new SecondaryProvisioner() {
+      @Override public void provision(Object request, Callback callback) {
+      }
+
+      @Override public String toString() {
+        return "NoopSecondarySamplingStateProvisioner()";
+      }
+    };
     @Nullable SamplerFunction<HttpRequest> httpServerSampler;
     @Nullable SamplerFunction<RpcRequest> rpcServerSampler;
     SecondarySampler secondarySampler;
@@ -103,8 +112,21 @@ public final class SecondarySampling
     }
 
     /**
-     * Required: Performs secondary sampling before {@link #httpServerSampler(SamplerFunction)
-     * primary occurs}.
+     * Optional: Parses a request to provision new secondary sampling keys prior to {@link
+     * #secondarySampler(SecondarySampler) sampling existing ones}.
+     *
+     * <p>By default, this node will only participate in existing keys, it will not create new
+     * sampling keys.
+     */
+    public Builder provisioner(SecondaryProvisioner provisioner) {
+      if (provisioner == null) throw new NullPointerException("provisioner == null");
+      this.provisioner = provisioner;
+      return this;
+    }
+
+    /**
+     * Required: Performs secondary sampling before primary {@link #httpServerSampler(SamplerFunction)
+     * HTTP} and {@link #rpcServerSampler(SamplerFunction) RPC} sampling.
      */
     public Builder secondarySampler(SecondarySampler secondarySampler) {
       if (secondarySampler == null) throw new NullPointerException("secondarySampler == null");
@@ -124,6 +146,7 @@ public final class SecondarySampling
 
   final String fieldName, tagName;
   final Propagation.Factory delegate;
+  final SecondaryProvisioner provisioner;
   // TODO: it may be possible to make a parameterized primary sampler that just checks the input
   // type instead of having a separate type for http, rpc etc.
   @Nullable final SamplerFunction<HttpRequest> httpServerSampler;
@@ -134,6 +157,7 @@ public final class SecondarySampling
     this.fieldName = builder.fieldName;
     this.tagName = builder.tagName;
     this.delegate = builder.propagationFactory;
+    this.provisioner = builder.provisioner;
     this.httpServerSampler = builder.httpServerSampler;
     this.rpcServerSampler = builder.rpcServerSampler;
     this.secondarySampler = builder.secondarySampler;
@@ -184,10 +208,19 @@ public final class SecondarySampling
     @Override protected Extra create(Extra parent) {
       return new Extra(parent);
     }
+
+    Extra create(Map<SecondarySamplingState, Boolean> initial) {
+      return initial.isEmpty() ? new Extra() : new Extra(initial);
+    }
   }
 
   static final class Extra extends MapPropagationFields<SecondarySamplingState, Boolean> {
     Extra() {
+    }
+
+    // avoids copy-on-write for each keys on initial construction
+    Extra(Map<SecondarySamplingState, Boolean> initial) {
+      super(initial);
     }
 
     Extra(Extra parent) {
