@@ -22,15 +22,6 @@ import brave.propagation.TraceContext;
  * <p>Each invocation of the {@link SecondaryProvisioner.Callback} will provision a new key. When
  * that key is sampled, is means the node provisioning is also participating. When it is not
  * sampled, the node is just passing a key downstream for another to sample.
- *
- * <h3>Why not always sample new keys?</h3>
- * Some sites will want to decentralize key provisioning, so every time they create a key, they will
- * also sample it. For example, if such a site desires just data around the auth subsytem, the auth
- * service itself would provision a key and also send data for it before propagating downstream.
- *
- * <p>The converse could also be true. For example, existing Zipkin sites centralize policy in API
- * gateways. In this case, the duty for provisioning secondary keys could also be centralized, even
- * if the desired data is downstream.
  */
 public interface SecondaryProvisioner {
   interface Callback {
