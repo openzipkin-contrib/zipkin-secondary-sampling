@@ -14,10 +14,12 @@
     the License.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>io.github.openzipkin-contrib.zipkin-secondary-sampling</groupId>
+  <groupId>io.zipkin.contrib.zipkin-secondary-sampling</groupId>
   <artifactId>zipkin-secondary-sampling-parent</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
@@ -38,17 +40,25 @@
     <main.basedir>${project.basedir}</main.basedir>
 
     <!-- This allows you to test feature branches with jitpack -->
-<!--    <brave.groupId>com.github.openzipkin.brave</brave.groupId>-->
-<!--    <brave.version>master-SNAPSHOT</brave.version>-->
+    <!--    <brave.groupId>com.github.openzipkin.brave</brave.groupId>-->
+    <!--    <brave.version>master-SNAPSHOT</brave.version>-->
     <brave.groupId>io.zipkin.brave</brave.groupId>
     <brave.version>5.8.0</brave.version>
 
     <!-- override to set exclusions per-project -->
-    <errorprone.args />
+    <errorprone.args/>
     <errorprone.version>2.3.3</errorprone.version>
 
-    <license-maven-plugin.version>3.0</license-maven-plugin.version>
+    <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
+    <maven-install-plugin.version>3.0.0-M1</maven-install-plugin.version>
+    <maven-deploy-plugin.version>3.0.0-M1</maven-deploy-plugin.version>
+    <maven-release-plugin.version>2.5.3</maven-release-plugin.version>
+    <maven-source-plugin.version>3.1.0</maven-source-plugin.version>
+    <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
+    <maven-jar-plugin.version>3.1.2</maven-jar-plugin.version>
     <maven-failsafe-plugin.version>3.0.0-M3</maven-failsafe-plugin.version>
+    <maven-enforcer-plugin.version>3.0.0-M2</maven-enforcer-plugin.version>
+    <license-maven-plugin.version>3.0</license-maven-plugin.version>
   </properties>
 
   <name>Zipkin Secondary Sampling (Parent)</name>
@@ -71,8 +81,11 @@
 
   <scm>
     <url>https://github.com/openzipkin-contrib/zipkin-secondary-sampling</url>
-    <connection>scm:git:https://github.com/openzipkin-contrib/zipkin-secondary-sampling.git</connection>
-    <developerConnection>scm:git:https://github.com/openzipkin-contrib/zipkin-secondary-sampling.git</developerConnection>
+    <connection>scm:git:https://github.com/openzipkin-contrib/zipkin-secondary-sampling.git
+    </connection>
+    <developerConnection>
+      scm:git:https://github.com/openzipkin-contrib/zipkin-secondary-sampling.git
+    </developerConnection>
     <tag>HEAD</tag>
   </scm>
 
@@ -90,12 +103,16 @@
     <url>https://github.com/openzipkin-contrib/zipkin-secondary-sampling/issues</url>
   </issueManagement>
 
-  <repositories>
+  <distributionManagement>
     <repository>
-      <id>jitpack.io</id>
-      <url>https://jitpack.io</url>
+      <id>bintray</id>
+      <url>https://api.bintray.com/maven/openzipkin/maven/brave/;publish=1</url>
     </repository>
-  </repositories>
+    <snapshotRepository>
+      <id>jfrog-snapshots</id>
+      <url>https://oss.jfrog.org/artifactory/oss-snapshot-local</url>
+    </snapshotRepository>
+  </distributionManagement>
 
   <dependencyManagement>
     <dependencies>
@@ -134,7 +151,6 @@
     </dependency>
   </dependencies>
 
-
   <build>
     <pluginManagement>
       <plugins>
@@ -144,13 +160,13 @@
           <artifactId>maven</artifactId>
           <version>0.7.6</version>
           <configuration>
-            <maven>3.6.1</maven>
+            <maven>3.6.2</maven>
           </configuration>
         </plugin>
 
         <plugin>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.8.1</version>
+          <version>${maven-compiler-plugin.version}</version>
           <inherited>true</inherited>
           <configuration>
             <!-- Retrolambda will rewrite lambdas as Java 6 bytecode -->
@@ -185,13 +201,14 @@
 
       <plugin>
         <artifactId>maven-jar-plugin</artifactId>
-        <version>3.1.2</version>
+        <version>${maven-jar-plugin.version}</version>
       </plugin>
 
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${maven-failsafe-plugin.version}</version>
       </plugin>
+
       <plugin>
         <artifactId>maven-failsafe-plugin</artifactId>
         <version>${maven-failsafe-plugin.version}</version>
@@ -229,15 +246,36 @@
 
       <plugin>
         <artifactId>maven-install-plugin</artifactId>
-        <version>3.0.0-M1</version>
+        <version>${maven-install-plugin.version}</version>
       </plugin>
 
       <!-- Uploads occur as a last step (which also adds checksums) -->
       <plugin>
         <artifactId>maven-deploy-plugin</artifactId>
-        <version>3.0.0-M1</version>
+        <version>${maven-deploy-plugin.version}</version>
+      </plugin>
+      <plugin>
+        <artifactId>maven-release-plugin</artifactId>
+        <version>${maven-release-plugin.version}</version>
+        <configuration>
+          <useReleaseProfile>false</useReleaseProfile>
+          <releaseProfiles>release</releaseProfiles>
+          <autoVersionSubmodules>true</autoVersionSubmodules>
+          <!-- to match zipkin-scala (openzipkin/zipkin) -->
+          <tagNameFormat>@{project.version}</tagNameFormat>
+        </configuration>
       </plugin>
 
+      <plugin>
+        <groupId>io.zipkin.centralsync-maven-plugin</groupId>
+        <artifactId>centralsync-maven-plugin</artifactId>
+        <version>0.1.1</version>
+        <configuration>
+          <subject>openzipkin-contrib</subject>
+          <repo>maven</repo>
+          <packageName>zipkin-secondary-sampling</packageName>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>com.mycila</groupId>
         <artifactId>license-maven-plugin</artifactId>
@@ -282,7 +320,7 @@
 
       <plugin>
         <artifactId>maven-enforcer-plugin</artifactId>
-        <version>3.0.0-M2</version>
+        <version>${maven-enforcer-plugin.version}</version>
         <executions>
           <execution>
             <id>enforce-java</id>
@@ -303,6 +341,45 @@
   </build>
 
   <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <!-- Creates source jar -->
+          <plugin>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>${maven-source-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <!-- Creates javadoc jar -->
+          <plugin>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>${maven-javadoc-plugin.version}</version>
+            <configuration>
+              <failOnError>false</failOnError>
+              <!-- hush pedantic warnings: we don't put param and return on everything! -->
+              <doclint>none</doclint>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+                <phase>package</phase>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
     <profile>
       <id>error-prone-9+</id>
       <activation>

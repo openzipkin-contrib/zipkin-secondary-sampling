@@ -38,7 +38,7 @@ Setup this:
 Depend on this:
 ```xml
   <dependency>
-    <groupId>io.github.openzipkin-contrib.zipkin-secondary-sampling</groupId>
+    <groupId>io.zipkin.contrib.zipkin-secondary-sampling</groupId>
     <artifactId>brave-secondary-sampling</artifactId>
     <version>master-SNAPSHOT</version>
   </dependency>
@@ -58,6 +58,6 @@ Exclude brave from transitive deps
       </exclusion>
     </exclusions>
   </dependency>
-```  
+```
 
 TODO more instructions
