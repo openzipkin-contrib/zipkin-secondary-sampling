@@ -14,14 +14,12 @@
     the License.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.zipkin.contrib.zipkin-secondary-sampling</groupId>
   <artifactId>zipkin-secondary-sampling-parent</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>pom</packaging>
 
   <modules>
@@ -46,7 +44,7 @@
     <brave.version>5.8.0</brave.version>
 
     <!-- override to set exclusions per-project -->
-    <errorprone.args/>
+    <errorprone.args />
     <errorprone.version>2.3.3</errorprone.version>
 
     <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
@@ -86,7 +84,7 @@
     <developerConnection>
       scm:git:https://github.com/openzipkin-contrib/zipkin-secondary-sampling.git
     </developerConnection>
-    <tag>HEAD</tag>
+    <tag>0.1.0</tag>
   </scm>
 
   <!-- Developer section is needed for Maven Central, but doesn't need to include each person -->
