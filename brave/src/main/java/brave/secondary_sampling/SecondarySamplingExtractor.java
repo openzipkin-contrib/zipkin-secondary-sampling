@@ -42,15 +42,17 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
 
   @Override public TraceContextOrSamplingFlags extract(C request) {
     TraceContextOrSamplingFlags result = delegate.extract(request);
-    String maybeValue = getter.get(request, samplingKey);
-    if (maybeValue == null) return result;
 
     SampledLocalMap initial = new SampledLocalMap();
     provisioner.provision(request, initial);
-    for (String entry : maybeValue.split(",", 100)) {
-      MutableSecondarySamplingState state = MutableSecondarySamplingState.parse(entry);
-      boolean sampled = updateStateAndSample(request, state);
-      initial.addSamplingState(SecondarySamplingState.create(state), sampled);
+
+    String maybeValue = getter.get(request, samplingKey);
+    if (maybeValue != null) {
+      for (String entry : maybeValue.split(",", 100)) {
+        MutableSecondarySamplingState state = MutableSecondarySamplingState.parse(entry);
+        boolean sampled = updateStateAndSample(request, state);
+        initial.addSamplingState(SecondarySamplingState.create(state), sampled);
+      }
     }
 
     SecondarySampling.Extra extra = EXTRA_FACTORY.create(initial);
@@ -60,7 +62,7 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
     return builder.build();
   }
 
-  final class SampledLocalMap extends LinkedHashMap<SecondarySamplingState, Boolean>
+  static final class SampledLocalMap extends LinkedHashMap<SecondarySamplingState, Boolean>
     implements SecondaryProvisioner.Callback {
     boolean sampledLocal = false;
 

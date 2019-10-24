@@ -43,6 +43,8 @@ public interface SamplerController {
 
   SecondarySampler secondarySampler(String serviceName);
 
+  SecondaryProvisioner secondaryProvisioner(String serviceName);
+
   SamplerController putPrimaryHttpRule(
     String serviceName, /* only arg different is lack of sampling key */
     Matcher<HttpRequest> matcher, Sampler sampler
@@ -86,6 +88,8 @@ public interface SamplerController {
 
   SamplerController removeSecondaryRules(String samplingKey);
 
+  SamplerController putProvisioner(String serviceName, SecondaryProvisioner provisioner);
+
   // implementation is nested only to keep the important methods at the top of the file
   final class Default implements SamplerController {
     final Map<String, HttpRuleSampler> primaryHttpSamplers = new LinkedHashMap<>();
@@ -95,6 +99,8 @@ public interface SamplerController {
     final Map<String, SecondarySampler> secondaryRules = new LinkedHashMap<>();
     final Map<String, Map<String, SecondarySampler>> secondaryRulesByService =
       new LinkedHashMap<>();
+
+    final Map<String, SecondaryProvisioner> provisioners = new LinkedHashMap<>();
 
     @Override public SamplerFunction<HttpRequest> primaryHttpSampler(String serviceName) {
       return new SamplerFunction<HttpRequest>() { // defer evaluation so dynamic changes are visible
@@ -120,6 +126,12 @@ public interface SamplerController {
         if (sampler == null) sampler = secondaryRules.get(state.samplingKey());
         if (sampler == null) return false;
         return sampler.isSampled(request, state);
+      };
+    }
+
+    @Override public SecondaryProvisioner secondaryProvisioner(String serviceName) {
+      return (request, callback) -> {
+        provisioners.get(serviceName).provision(request, callback);
       };
     }
 
@@ -168,6 +180,11 @@ public interface SamplerController {
 
     Map<String, SecondarySampler> secondaryRulesByService(String serviceName) {
       return secondaryRulesByService.computeIfAbsent(serviceName, s -> new LinkedHashMap<>());
+    }
+
+    @Override public SamplerController putProvisioner(String serviceName, SecondaryProvisioner provisioner) {
+      provisioners.put(serviceName, provisioner);
+      return this;
     }
   }
 }
