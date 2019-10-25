@@ -231,4 +231,9 @@ class TracedNode {
     span.kind(Span.Kind.SERVER).name(serverRequest.method());
     return span.start();
   }
+
+  @Override
+  public String toString() {
+    return localServiceName;
+  }
 }

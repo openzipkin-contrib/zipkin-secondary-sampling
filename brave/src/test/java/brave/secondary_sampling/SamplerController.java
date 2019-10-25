@@ -131,7 +131,7 @@ public interface SamplerController {
 
     @Override public SecondaryProvisioner secondaryProvisioner(String serviceName) {
       return (request, callback) -> {
-        provisioners.get(serviceName).provision(request, callback);
+        provisioners.getOrDefault(serviceName, (r, c) -> {}).provision(request, callback);
       };
     }
 

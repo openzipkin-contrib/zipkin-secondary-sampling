@@ -18,10 +18,8 @@ import brave.propagation.B3SinglePropagation;
 import brave.propagation.Propagation;
 import brave.sampler.RateLimitingSampler;
 import brave.sampler.Sampler;
-import brave.secondary_sampling.FakeHttpRequest;
-import brave.secondary_sampling.SamplerController;
-import brave.secondary_sampling.SecondarySampling;
-import brave.secondary_sampling.TraceForwarder;
+import brave.secondary_sampling.*;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -49,6 +47,7 @@ public class SecondarySamplingIntegratedTest {
   InMemoryStorage zipkin = InMemoryStorage.newBuilder().build();
   InMemoryStorage gatewayplay = InMemoryStorage.newBuilder().build();
   InMemoryStorage authcache = InMemoryStorage.newBuilder().build();
+  InMemoryStorage license = InMemoryStorage.newBuilder().build();
 
   Reporter<Span> zipkinReporter = // used only in base case tests
     s -> zipkin.spanConsumer().accept(asList(s)).enqueue(NOOP_CALLBACK);
@@ -56,7 +55,8 @@ public class SecondarySamplingIntegratedTest {
   Reporter<zipkin2.Span> traceForwarder = new TraceForwarder()
     .configureSamplingKey("b3", zipkin.spanConsumer())
     .configureSamplingKey("gatewayplay", gatewayplay.spanConsumer())
-    .configureSamplingKey("authcache", authcache.spanConsumer());
+    .configureSamplingKey("authcache", authcache.spanConsumer())
+    .configureSamplingKey("license100pct", license.spanConsumer());
 
   Propagation.Factory b3 = B3SinglePropagation.FACTORY;
 
@@ -71,6 +71,19 @@ public class SecondarySamplingIntegratedTest {
   SamplerController authcacheSampler = new SamplerController.Default()
     .putSecondaryRpcRule("auth", "authcache",
       methodEquals("GetToken"), RateLimitingSampler.create(100), 1 // ttl
+    );
+
+  SamplerController licenseSampler = new SamplerController.Default()
+    .putProvisioner("license", (request, callback) -> callback.addSamplingState(
+      SecondarySamplingState.create(
+        MutableSecondarySamplingState.create("license100pct")),
+      true
+    ))
+    .putSecondaryRule("cache", "license100pct",
+      passive()
+    )
+    .putSecondaryRule("licensedb", "license100pct",
+      passive()
     );
 
   SamplerController allSampler = new SamplerController.Default()
@@ -94,6 +107,12 @@ public class SecondarySamplingIntegratedTest {
       .propagationFactory(b3)
       .httpServerSampler(authcacheSampler.primaryHttpSampler(localServiceName))
       .secondarySampler(authcacheSampler.secondarySampler(localServiceName)).build();
+
+  Function<String, SecondarySampling> configureLicense = localServiceName ->
+    SecondarySampling.newBuilder()
+      .propagationFactory(b3)
+      .secondarySampler(licenseSampler.secondarySampler(localServiceName))
+      .provisioner(licenseSampler.secondaryProvisioner(localServiceName)).build();
 
   Function<String, SecondarySampling> configureAllSampling = localServiceName ->
     SecondarySampling.newBuilder()
@@ -329,6 +348,23 @@ public class SecondarySamplingIntegratedTest {
     );
     assertThat(authcache.getDependencies()).containsExactly( // doesn't double-count!
       DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
+    );
+  }
+
+  @Test public void license_provision_and_sample() {
+    serviceRoot = TracedNode.createServiceGraph(configureLicense, traceForwarder);
+
+    FakeHttpRequest.Client request = new FakeHttpRequest.Client("/play");
+    request.header("b3", "0");
+
+    serviceRoot.execute(request);
+
+    assertThat(zipkin.getDependencies()).isEmpty();
+    assertThat(gatewayplay.getDependencies()).isEmpty();
+    assertThat(authcache.getDependencies()).isEmpty();
+    assertThat(license.getDependencies()).containsExactly(
+      DependencyLink.newBuilder().parent("license").child("cache").callCount(1).build(),
+      DependencyLink.newBuilder().parent("cache").child("licensedb").callCount(1).build()
     );
   }
 
