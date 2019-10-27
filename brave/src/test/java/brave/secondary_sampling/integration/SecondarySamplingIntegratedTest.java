@@ -18,8 +18,12 @@ import brave.propagation.B3SinglePropagation;
 import brave.propagation.Propagation;
 import brave.sampler.RateLimitingSampler;
 import brave.sampler.Sampler;
-import brave.secondary_sampling.*;
-
+import brave.secondary_sampling.FakeHttpRequest;
+import brave.secondary_sampling.MutableSecondarySamplingState;
+import brave.secondary_sampling.SamplerController;
+import brave.secondary_sampling.SecondarySampling;
+import brave.secondary_sampling.SecondarySamplingState;
+import brave.secondary_sampling.TraceForwarder;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
