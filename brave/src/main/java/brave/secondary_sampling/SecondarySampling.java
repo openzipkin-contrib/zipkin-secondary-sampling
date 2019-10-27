@@ -28,6 +28,8 @@ import brave.rpc.RpcRequest;
 import brave.rpc.RpcTracing;
 import brave.rpc.RpcTracingCustomizer;
 import brave.sampler.SamplerFunction;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -197,16 +199,20 @@ public final class SecondarySampling
     final brave.propagation.Propagation<K> delegate;
     final K samplingKey;
     final SecondarySampling secondarySampling;
+    final List<K> keys;
 
     Propagation(brave.propagation.Propagation<K> delegate, K samplingKey,
       SecondarySampling secondarySampling) {
       this.delegate = delegate;
       this.samplingKey = samplingKey;
       this.secondarySampling = secondarySampling;
+      ArrayList<K> keys = new ArrayList<>(delegate.keys());
+      keys.add(samplingKey);
+      this.keys = Collections.unmodifiableList(keys);
     }
 
     @Override public List<K> keys() {
-      return delegate.keys();
+      return keys;
     }
 
     @Override public <C> TraceContext.Injector<C> injector(Setter<C, K> setter) {
