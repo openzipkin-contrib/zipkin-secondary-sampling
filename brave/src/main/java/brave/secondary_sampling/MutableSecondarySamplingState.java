@@ -65,12 +65,14 @@ public final class MutableSecondarySamplingState {
 
   /** Retrieves the current TTL of this {@link #samplingKey()} or zero if there is none. */
   public int ttl() {
+    // TODO: add a limit to TTL, like 255 and make this and below super more efficient
     String ttl = parameter("ttl");
-    return ttl == null ? 0 : Integer.parseInt(ttl);
+    if (ttl == null || "0".equals(ttl) || ttl.startsWith("-")) return 0;
+    return Integer.parseInt(ttl); // TODO: when we make a limit, eliminate the parse exception
   }
 
   @Nullable public MutableSecondarySamplingState ttl(int ttl) {
-    if (ttl == 0) return removeParameter("ttl");
+    if (ttl <= 0) return removeParameter("ttl");
     return parameter("ttl", String.valueOf(ttl));
   }
 
