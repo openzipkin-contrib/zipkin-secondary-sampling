@@ -15,7 +15,6 @@ package brave.secondary_sampling;
 
 import brave.http.HttpServerRequest;
 import brave.propagation.B3SinglePropagation;
-import brave.propagation.Propagation;
 import brave.propagation.TraceContext.Extractor;
 import brave.propagation.TraceContextOrSamplingFlags;
 import brave.secondary_sampling.SecondarySampling.Extra;
@@ -25,29 +24,19 @@ import static brave.propagation.Propagation.KeyFactory.STRING;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SecondarySamplingProvisionerTest {
-  String serviceName = "license";
-  SamplerController sampler = new SamplerController.Default();
-  SecondarySampling secondarySampling = SecondarySampling.newBuilder()
-    .propagationFactory(B3SinglePropagation.FACTORY)
-    .secondarySampler(sampler.secondarySampler(serviceName))
-    .provisioner(sampler.secondaryProvisioner(serviceName))
-    .build();
-
-  Propagation<String> propagation = secondarySampling.create(STRING);
-
-  Extractor<HttpServerRequest> httpExtractor = propagation.extractor(HttpServerRequest::header);
-
-  FakeHttpRequest.Client clientHttpRequest = new FakeHttpRequest.Client("/validateLicense");
-  FakeHttpRequest.Server serverHttpRequest = new FakeHttpRequest.Server(clientHttpRequest);
+  FakeHttpRequest.Server request = new FakeHttpRequest.Server(
+    new FakeHttpRequest.Client("/validateLicense")
+  );
 
   @Test public void extract_samplesLocalWhenProvisioned() {
-    sampler.putProvisioner(serviceName, (request, callback) -> callback.addSamplingState(
-      SecondarySamplingState.create(
-        MutableSecondarySamplingState.create("license100pct")),
-      true
-    ));
+    Extractor<HttpServerRequest> extractor = extractor((request, callback) ->
+      callback.addSamplingState(
+        SecondarySamplingState.create(
+          MutableSecondarySamplingState.create("license100pct")),
+        true
+      ));
 
-    TraceContextOrSamplingFlags extracted = httpExtractor.extract(serverHttpRequest);
+    TraceContextOrSamplingFlags extracted = extractor.extract(request);
     assertThat(extracted.sampledLocal()).isTrue();
 
     Extra extra = (Extra) extracted.extra().get(0);
@@ -55,4 +44,74 @@ public class SecondarySamplingProvisionerTest {
       .containsEntry(SecondarySamplingState.create("license100pct"), true);
   }
 
+  /** This shows if the provisioner mistakenly adds the same key twice, the first wins. */
+  @Test public void extract_firstAddWins() {
+    Extractor<HttpServerRequest> extractor = extractor((request, callback) -> {
+      callback.addSamplingState(
+        SecondarySamplingState.create(
+          MutableSecondarySamplingState.create("license100pct")),
+        false
+      );
+      // This will be ignored, instead of somehow merged
+      callback.addSamplingState(
+        SecondarySamplingState.create(
+          MutableSecondarySamplingState.create("license100pct").ttl(3)),
+        true
+      );
+    });
+
+    TraceContextOrSamplingFlags extracted = extractor.extract(request);
+    assertThat(extracted.sampledLocal()).isFalse();
+
+    Extra extra = (Extra) extracted.extra().get(0);
+    assertThat(extra.toMap().keySet())
+      .usingFieldByFieldElementComparator() // SecondarySamplingState.equals ignores params
+      .containsExactly(SecondarySamplingState.create("license100pct"));
+  }
+
+  /** This shows the provisioner wins on the same key vs incoming state. */
+  @Test public void extract_overridesIncomingSamplingKey() {
+    Extractor<HttpServerRequest> extractor = extractor((request, callback) ->
+      callback.addSamplingState(
+        SecondarySamplingState.create(
+          MutableSecondarySamplingState.create("license100pct")),
+        true
+      ));
+
+    // Incoming state has the same key, but it has a TTL. We expect this to be overwritten.
+    request.header("sampling", "license100pct;ttl=5");
+    TraceContextOrSamplingFlags extracted = extractor.extract(request);
+    assertThat(extracted.sampledLocal()).isTrue();
+
+    Extra extra = (Extra) extracted.extra().get(0);
+    assertThat(extra.toMap().keySet())
+      .usingFieldByFieldElementComparator() // SecondarySamplingState.equals ignores params
+      .containsExactly(SecondarySamplingState.create("license100pct"));
+  }
+
+  @Test public void extract_provisionedIsntSampled() {
+    Extractor<HttpServerRequest> extractor = extractor((request, callback) ->
+      callback.addSamplingState(
+        SecondarySamplingState.create(
+          MutableSecondarySamplingState.create("license100pct")),
+        false // set provision, but sampled false. This is for downstream sampling.
+      ));
+
+    TraceContextOrSamplingFlags extracted = extractor.extract(request);
+    assertThat(extracted.sampledLocal()).isFalse();
+
+    Extra extra = (Extra) extracted.extra().get(0);
+    assertThat(extra.toMap())
+      .containsEntry(SecondarySamplingState.create("license100pct"), false);
+  }
+
+  static Extractor<HttpServerRequest> extractor(SecondaryProvisioner provisioner) {
+    SecondarySampling secondarySampling = SecondarySampling.newBuilder()
+      .propagationFactory(B3SinglePropagation.FACTORY)
+      .provisioner(provisioner)
+      .secondarySampler(SecondarySamplers.passive())
+      .build();
+
+    return secondarySampling.create(STRING).extractor(HttpServerRequest::header);
+  }
 }
