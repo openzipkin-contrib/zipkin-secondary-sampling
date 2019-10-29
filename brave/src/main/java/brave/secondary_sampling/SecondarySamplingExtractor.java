@@ -16,6 +16,7 @@ package brave.secondary_sampling;
 import brave.propagation.Propagation.Getter;
 import brave.propagation.TraceContext.Extractor;
 import brave.propagation.TraceContextOrSamplingFlags;
+import java.util.LinkedHashMap;
 
 import static brave.secondary_sampling.SecondarySampling.EXTRA_FACTORY;
 
@@ -27,36 +28,52 @@ import static brave.secondary_sampling.SecondarySampling.EXTRA_FACTORY;
 final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
   final Extractor<C> delegate;
   final Getter<C, K> getter;
+  final SecondaryProvisioner provisioner;
   final SecondarySampler sampler;
   final K samplingKey;
 
   SecondarySamplingExtractor(SecondarySampling.Propagation<K> propagation, Getter<C, K> getter) {
     this.delegate = propagation.delegate.extractor(getter);
     this.getter = getter;
+    this.provisioner = propagation.secondarySampling.provisioner;
     this.sampler = propagation.secondarySampling.secondarySampler;
     this.samplingKey = propagation.samplingKey;
   }
 
   @Override public TraceContextOrSamplingFlags extract(C request) {
     TraceContextOrSamplingFlags result = delegate.extract(request);
-    String maybeValue = getter.get(request, samplingKey);
-    if (maybeValue == null) return result;
 
-    SecondarySampling.Extra extra = EXTRA_FACTORY.create();
-    boolean sampledLocal = false;
-    for (String entry : maybeValue.split(",", 100)) {
-      MutableSecondarySamplingState state = MutableSecondarySamplingState.parse(entry);
-      boolean sampled = updateStateAndSample(request, state);
-      if (sampled) sampledLocal = true;
-      extra.put(SecondarySamplingState.create(state), sampled);
+    SampledLocalMap initial = new SampledLocalMap();
+    provisioner.provision(request, initial);
+
+    String maybeValue = getter.get(request, samplingKey);
+    if (maybeValue != null) {
+      for (String entry : maybeValue.split(",", 100)) {
+        MutableSecondarySamplingState state = MutableSecondarySamplingState.parse(entry);
+        boolean sampled = updateStateAndSample(request, state);
+        initial.addSamplingState(SecondarySamplingState.create(state), sampled);
+      }
     }
 
-    if (extra.isEmpty()) return result;
-
+    SecondarySampling.Extra extra = EXTRA_FACTORY.create(initial);
     TraceContextOrSamplingFlags.Builder builder = result.toBuilder();
-    if (sampledLocal) builder.sampledLocal(); // Data will be recorded even if B3 unsampled
+    if (initial.sampledLocal) builder.sampledLocal(); // Data will be recorded even if B3 unsampled
     builder.addExtra(extra);
     return builder.build();
+  }
+
+  static final class SampledLocalMap extends LinkedHashMap<SecondarySamplingState, Boolean>
+    implements SecondaryProvisioner.Callback {
+    boolean sampledLocal = false;
+
+    @Override public void addSamplingState(SecondarySamplingState state, boolean sampled) {
+      if (containsKey(state)) {
+        // redundant: log and continue
+        return;
+      }
+      if (sampled) sampledLocal = true;
+      put(state, sampled);
+    }
   }
 
   boolean updateStateAndSample(Object request, MutableSecondarySamplingState state) {
