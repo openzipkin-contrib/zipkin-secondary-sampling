@@ -20,7 +20,7 @@
   <parent>
     <groupId>io.zipkin.contrib.zipkin-secondary-sampling</groupId>
     <artifactId>zipkin-secondary-sampling-parent</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.1-SNAPSHOT</version>
   </parent>
 
   <artifactId>benchmarks</artifactId>
