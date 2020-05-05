@@ -1,0 +1,6 @@
+# We use brave.internal.Nullable and implicitly brave.internal.InternalPropagation
+Import-Package: \
+  !brave.internal*,\
+  *
+Export-Package: \
+  brave.secondary_sampling

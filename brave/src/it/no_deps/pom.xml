@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Copyright 2019-2020 The OpenZipkin Authors
+
+    Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+    in compliance with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software distributed under the License
+    is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+    or implied. See the License for the specific language governing permissions and limitations under
+    the License.
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>@project.groupId@</groupId>
+  <artifactId>no_deps</artifactId>
+  <version>@project.version@</version>
+  <name>no_deps</name>
+
+  <properties>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>@project.groupId@</groupId>
+      <artifactId>@project.artifactId@</artifactId>
+      <version>@project.version@</version>
+    </dependency>
+    <dependency>
+      <groupId>io.zipkin.brave</groupId>
+      <artifactId>brave</artifactId>
+      <version>@brave.run.version@</version>
+    </dependency>
+    <dependency>
+      <groupId>io.zipkin.brave</groupId>
+      <artifactId>brave-instrumentation-http</artifactId>
+      <version>@brave.run.version@</version>
+    </dependency>
+    <dependency>
+      <groupId>io.zipkin.brave</groupId>
+      <artifactId>brave-instrumentation-rpc</artifactId>
+      <version>@brave.run.version@</version>
+    </dependency>
+
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>@junit.version@</version>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <version>@assertj.version@</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <testSourceDirectory>@project.build.testSourceDirectory@</testSourceDirectory>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>@maven-compiler-plugin.version@</version>
+        <executions>
+          <execution>
+            <id>default-testCompile</id>
+            <configuration>
+              <!-- Cherry-pick tests so that we don't have to include dependencies -->
+              <testIncludes>
+                <include>**/BasicUsageTest*.java</include>
+                <include>**/FakeHttpRequest*.java</include>
+              </testIncludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>@maven-failsafe-plugin.version@</version>
+        <configuration>
+          <failIfNoTests>true</failIfNoTests>
+          <!-- Cherry-pick tests so that we don't have to include dependencies -->
+          <includes>
+            <include>brave.secondary_sampling.BasicUsageTest</include>
+          </includes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -27,10 +27,10 @@ import java.util.StringJoiner;
  * root, it is copied as the {@code parentId} parameter of the corresponding {@link #tagName
  * sampled_keys entry}. This allows the trace forwarder to fix the hierarchy for this participant.
  */
-final class SecondarySamplingFinishedSpanHandler extends brave.handler.FinishedSpanHandler {
+final class SecondarySamplingSpanHandler extends brave.handler.FinishedSpanHandler {
   final String tagName;
 
-  SecondarySamplingFinishedSpanHandler(String tagName) {
+  SecondarySamplingSpanHandler(String tagName) {
     this.tagName = tagName;
   }
 
