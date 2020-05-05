@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -17,10 +17,8 @@ import brave.http.HttpServerRequest;
 import brave.propagation.B3SinglePropagation;
 import brave.propagation.TraceContext.Extractor;
 import brave.propagation.TraceContextOrSamplingFlags;
-import brave.secondary_sampling.SecondarySampling.Extra;
 import org.junit.Test;
 
-import static brave.propagation.Propagation.KeyFactory.STRING;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class SecondarySamplingProvisionerTest {
@@ -39,8 +37,8 @@ public class SecondarySamplingProvisionerTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(request);
     assertThat(extracted.sampledLocal()).isTrue();
 
-    Extra extra = (Extra) extracted.extra().get(0);
-    assertThat(extra.toMap())
+    SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
+    assertThat(extra.map())
       .containsEntry(SecondarySamplingState.create("license100pct"), true);
   }
 
@@ -63,8 +61,8 @@ public class SecondarySamplingProvisionerTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(request);
     assertThat(extracted.sampledLocal()).isFalse();
 
-    Extra extra = (Extra) extracted.extra().get(0);
-    assertThat(extra.toMap().keySet())
+    SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
+    assertThat(extra.map().keySet())
       .usingFieldByFieldElementComparator() // SecondarySamplingState.equals ignores params
       .containsExactly(SecondarySamplingState.create("license100pct"));
   }
@@ -83,8 +81,8 @@ public class SecondarySamplingProvisionerTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(request);
     assertThat(extracted.sampledLocal()).isTrue();
 
-    Extra extra = (Extra) extracted.extra().get(0);
-    assertThat(extra.toMap().keySet())
+    SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
+    assertThat(extra.map().keySet())
       .usingFieldByFieldElementComparator() // SecondarySamplingState.equals ignores params
       .containsExactly(SecondarySamplingState.create("license100pct"));
   }
@@ -100,8 +98,8 @@ public class SecondarySamplingProvisionerTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(request);
     assertThat(extracted.sampledLocal()).isFalse();
 
-    Extra extra = (Extra) extracted.extra().get(0);
-    assertThat(extra.toMap())
+    SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
+    assertThat(extra.map())
       .containsEntry(SecondarySamplingState.create("license100pct"), false);
   }
 
@@ -112,6 +110,6 @@ public class SecondarySamplingProvisionerTest {
       .secondarySampler(SecondarySamplers.passive())
       .build();
 
-    return secondarySampling.create(STRING).extractor(HttpServerRequest::header);
+    return secondarySampling.extractor(HttpServerRequest::header);
   }
 }

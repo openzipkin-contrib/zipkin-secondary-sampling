@@ -15,7 +15,6 @@ package brave.secondary_sampling;
 
 import brave.handler.MutableSpan;
 import brave.propagation.TraceContext;
-import brave.secondary_sampling.SecondarySampling.Extra;
 import java.util.StringJoiner;
 
 /**
@@ -38,7 +37,7 @@ final class SecondarySamplingSpanHandler extends brave.handler.FinishedSpanHandl
     StringJoiner joiner = new StringJoiner(",");
     if (Boolean.TRUE.equals(context.sampled())) joiner.add("b3");
 
-    Extra extra = context.findExtra(Extra.class);
+    SecondarySamplingDecisions extra = context.findExtra(SecondarySamplingDecisions.class);
     if (extra != null) {
       String parentId;
       if (context.isLocalRoot()) {
@@ -47,7 +46,7 @@ final class SecondarySamplingSpanHandler extends brave.handler.FinishedSpanHandl
         parentId = null;
       }
 
-      extra.forEach((state, sampled) -> {
+      extra.map().forEach((state, sampled) -> {
         if (!sampled) return;
         String upstreamSpanId = state.parameter("spanId");
         if (parentId != null && !parentId.equals(upstreamSpanId)) {

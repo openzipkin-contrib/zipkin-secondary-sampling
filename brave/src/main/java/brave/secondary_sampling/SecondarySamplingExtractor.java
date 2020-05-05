@@ -16,37 +16,38 @@ package brave.secondary_sampling;
 import brave.propagation.Propagation.Getter;
 import brave.propagation.TraceContext.Extractor;
 import brave.propagation.TraceContextOrSamplingFlags;
-import java.util.LinkedHashMap;
 
-import static brave.secondary_sampling.SecondarySampling.EXTRA_FACTORY;
+import static brave.secondary_sampling.SecondarySampling.EXTRA_HANDLER;
 
 /**
  * This extracts the {@link SecondarySampling#fieldName sampling header}, and parses it a list of
  * {@link SecondarySamplingState}. For each extracted sampling key, TTL and sampling takes place if
  * configured.
  */
-final class SecondarySamplingExtractor<R, K> implements Extractor<R> {
+final class SecondarySamplingExtractor<R> implements Extractor<R> {
   final Extractor<R> delegate;
-  final Getter<R, K> getter;
+  final Getter<R, String> getter;
   final SecondaryProvisioner provisioner;
-  final SecondarySampler sampler;
-  final K samplingKey;
+  final SecondarySampler secondarySampler;
+  final String fieldName;
 
-  SecondarySamplingExtractor(SecondarySampling.Propagation<K> propagation, Getter<R, K> getter) {
-    this.delegate = propagation.delegate.extractor(getter);
+  SecondarySamplingExtractor(SecondarySampling secondarySampling, Getter<R, String> getter) {
+    this.delegate = secondarySampling.delegate.extractor(getter);
     this.getter = getter;
-    this.provisioner = propagation.secondarySampling.provisioner;
-    this.sampler = propagation.secondarySampling.secondarySampler;
-    this.samplingKey = propagation.samplingKey;
+    this.provisioner = secondarySampling.provisioner;
+    this.secondarySampler = secondarySampling.secondarySampler;
+    this.fieldName = secondarySampling.fieldName;
   }
 
   @Override public TraceContextOrSamplingFlags extract(R request) {
     TraceContextOrSamplingFlags result = delegate.extract(request);
 
-    SampledLocalMap initial = new SampledLocalMap();
+    TraceContextOrSamplingFlags.Builder builder = result.toBuilder();
+    SecondarySamplingDecisions initial = EXTRA_HANDLER.provisionExtra(builder);
+
     provisioner.provision(request, initial);
 
-    String maybeValue = getter.get(request, samplingKey);
+    String maybeValue = getter.get(request, fieldName);
     if (maybeValue != null) {
       for (String entry : maybeValue.split(",", 100)) {
         MutableSecondarySamplingState state = MutableSecondarySamplingState.parse(entry);
@@ -55,25 +56,8 @@ final class SecondarySamplingExtractor<R, K> implements Extractor<R> {
       }
     }
 
-    SecondarySampling.Extra extra = EXTRA_FACTORY.create(initial);
-    TraceContextOrSamplingFlags.Builder builder = result.toBuilder();
-    if (initial.sampledLocal) builder.sampledLocal(); // Data will be recorded even if B3 unsampled
-    builder.addExtra(extra);
+    if (initial.sampledLocal) builder.sampledLocal();
     return builder.build();
-  }
-
-  static final class SampledLocalMap extends LinkedHashMap<SecondarySamplingState, Boolean>
-    implements SecondaryProvisioner.Callback {
-    boolean sampledLocal = false;
-
-    @Override public void addSamplingState(SecondarySamplingState state, boolean sampled) {
-      if (containsKey(state)) {
-        // redundant: log and continue
-        return;
-      }
-      if (sampled) sampledLocal = true;
-      put(state, sampled);
-    }
   }
 
   boolean updateStateAndSample(Object request, MutableSecondarySamplingState state) {
@@ -86,6 +70,6 @@ final class SecondarySamplingExtractor<R, K> implements Extractor<R> {
       ttlSampled = true;
     }
 
-    return ttlSampled || sampler.isSampled(request, state);
+    return ttlSampled || secondarySampler.isSampled(request, state);
   }
 }

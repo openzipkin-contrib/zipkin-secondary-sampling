@@ -23,7 +23,6 @@ import brave.http.HttpServerHandler;
 import brave.http.HttpTracing;
 import brave.propagation.B3Propagation;
 import brave.propagation.TraceContext;
-import brave.secondary_sampling.SecondarySampling.Extra;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
@@ -101,12 +100,13 @@ public class BasicUsageTest {
 
   // hack until we have a local provisioning api
   static void setSampled(TraceContext context, String samplingKey) {
-    context.findExtra(Extra.class).put(SecondarySamplingState.create(samplingKey), true);
+    context.findExtra(SecondarySamplingDecisions.class)
+        .addSamplingState(SecondarySamplingState.create(samplingKey), true);
   }
 
   // hack until https://github.com/openzipkin-contrib/zipkin-secondary-sampling/issues/12
   static boolean isSampled(TraceContext context, String samplingKey) {
-    return Boolean.TRUE.equals(
-        context.findExtra(Extra.class).get(SecondarySamplingState.create(samplingKey)));
+    return Boolean.TRUE.equals(context.findExtra(SecondarySamplingDecisions.class).map()
+        .get(SecondarySamplingState.create(samplingKey)));
   }
 }

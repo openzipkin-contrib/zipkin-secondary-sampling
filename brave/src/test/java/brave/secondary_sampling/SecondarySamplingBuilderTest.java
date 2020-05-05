@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -19,7 +19,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.Test;
 
-import static brave.propagation.Propagation.KeyFactory.STRING;
 import static org.assertj.core.api.Assertions.assertThat;
 
 // TODO: we eventually need to refactor SecondarySamplingTest and SecondarySamplingStateTest to not
@@ -38,8 +37,7 @@ public class SecondarySamplingBuilderTest {
       .propagationFactory(B3SinglePropagation.FACTORY)
       .build();
 
-    SecondarySampling.Propagation<String> propagation = secondarySampling.create(STRING);
-    assertThat(propagation.keys())
+    assertThat(secondarySampling.keys())
       .containsExactly("b3", "sampling");
 
     // This is an example to reinforce the use case, eventhough the unit test covers this.
@@ -50,7 +48,7 @@ public class SecondarySamplingBuilderTest {
     Map<String, String> messageHeaders = new LinkedHashMap<>();
     messageHeaders.put("sampling", "links");
 
-    assertThat(propagation.keys())
+    assertThat(secondarySampling.keys())
       .containsAnyElementsOf(messageHeaders.keySet());
   }
 }
