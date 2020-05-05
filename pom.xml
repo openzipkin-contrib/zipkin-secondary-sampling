@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
 
-    Copyright 2019 The OpenZipkin Authors
+    Copyright 2019-2020 The OpenZipkin Authors
 
     Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
     in compliance with the License. You may obtain a copy of the License at
@@ -41,21 +41,30 @@
     <!--    <brave.groupId>com.github.openzipkin.brave</brave.groupId>-->
     <!--    <brave.version>master-SNAPSHOT</brave.version>-->
     <brave.groupId>io.zipkin.brave</brave.groupId>
-    <brave.version>5.8.0</brave.version>
+    <brave.version>5.10.2</brave.version>
+
+    <!-- until we are off internals, brave/src/it needs to check we don't drift -->
+    <brave.run.version>5.11.2</brave.run.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />
-    <errorprone.version>2.3.3</errorprone.version>
+    <errorprone.version>2.3.4</errorprone.version>
+
+    <junit.version>4.13</junit.version>
+    <assertj.version>3.15.0</assertj.version>
 
     <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
     <maven-install-plugin.version>3.0.0-M1</maven-install-plugin.version>
     <maven-deploy-plugin.version>3.0.0-M1</maven-deploy-plugin.version>
-    <maven-release-plugin.version>2.5.3</maven-release-plugin.version>
-    <maven-source-plugin.version>3.1.0</maven-source-plugin.version>
-    <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
-    <maven-jar-plugin.version>3.1.2</maven-jar-plugin.version>
-    <maven-failsafe-plugin.version>3.0.0-M3</maven-failsafe-plugin.version>
-    <maven-enforcer-plugin.version>3.0.0-M2</maven-enforcer-plugin.version>
+    <maven-release-plugin.version>3.0.0-M1</maven-release-plugin.version>
+    <maven-source-plugin.version>3.2.1</maven-source-plugin.version>
+    <maven-javadoc-plugin.version>3.2.0</maven-javadoc-plugin.version>
+    <maven-jar-plugin.version>3.2.0</maven-jar-plugin.version>
+    <maven-shade-plugin.version>3.2.3</maven-shade-plugin.version>
+    <maven-failsafe-plugin.version>3.0.0-M4</maven-failsafe-plugin.version>
+    <maven-invoker-plugin.version>3.2.1</maven-invoker-plugin.version>
+    <maven-enforcer-plugin.version>3.0.0-M3</maven-enforcer-plugin.version>
+    <maven-bundle-plugin.version>4.2.1</maven-bundle-plugin.version>
     <license-maven-plugin.version>3.0</license-maven-plugin.version>
   </properties>
 
@@ -112,20 +121,24 @@
     </snapshotRepository>
   </distributionManagement>
 
+  <!-- TODO: see if jitpack works with bom yet -->
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>${brave.groupId}</groupId>
+        <artifactId>brave</artifactId>
+        <version>${brave.version}</version>
+      </dependency>
       <dependency>
         <groupId>${brave.groupId}</groupId>
         <artifactId>brave-instrumentation-http</artifactId>
         <version>${brave.version}</version>
       </dependency>
-
       <dependency>
         <groupId>${brave.groupId}</groupId>
         <artifactId>brave-instrumentation-http-tests</artifactId>
         <version>${brave.version}</version>
       </dependency>
-
       <dependency>
         <groupId>${brave.groupId}</groupId>
         <artifactId>brave-instrumentation-rpc</artifactId>
@@ -139,12 +152,12 @@
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <scope>test</scope>
-      <version>4.12</version>
+      <version>${junit.version}</version>
     </dependency>
     <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
-      <version>3.13.2</version>
+      <version>${assertj.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -156,9 +169,9 @@
         <plugin>
           <groupId>io.takari</groupId>
           <artifactId>maven</artifactId>
-          <version>0.7.6</version>
+          <version>0.7.7</version>
           <configuration>
-            <maven>3.6.2</maven>
+            <maven>3.6.3</maven>
           </configuration>
         </plugin>
 
@@ -178,11 +191,38 @@
       </plugins>
     </pluginManagement>
 
+    <resources>
+      <resource>
+        <filtering>false</filtering>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <filtering>false</filtering>
+        <directory>src/main/java</directory>
+        <includes>
+          <include>**</include>
+        </includes>
+        <excludes>
+          <exclude>**/*.java</exclude>
+        </excludes>
+      </resource>
+      <!-- This adds the LICENSE and NOTICE file to the jar and -sources jar of each module -->
+      <resource>
+        <filtering>false</filtering>
+        <directory>${main.basedir}</directory>
+        <targetPath>META-INF/</targetPath>
+        <includes>
+          <include>LICENSE</include>
+          <include>NOTICE</include>
+        </includes>
+      </resource>
+    </resources>
+
     <plugins>
       <plugin>
         <groupId>net.orfjackal.retrolambda</groupId>
         <artifactId>retrolambda-maven-plugin</artifactId>
-        <version>2.5.6</version>
+        <version>2.5.7</version>
         <executions>
           <execution>
             <goals>
@@ -200,6 +240,12 @@
       <plugin>
         <artifactId>maven-jar-plugin</artifactId>
         <version>${maven-jar-plugin.version}</version>
+        <configuration>
+          <archive>
+            <!-- prevents huge pom file from also being added to the jar under META-INF/maven -->
+            <addMavenDescriptor>false</addMavenDescriptor>
+          </archive>
+        </configuration>
       </plugin>
 
       <plugin>
@@ -217,6 +263,32 @@
             <goals>
               <goal>integration-test</goal>
               <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <artifactId>maven-invoker-plugin</artifactId>
+        <version>${maven-invoker-plugin.version}</version>
+        <configuration>
+          <cloneProjectsTo>${project.build.directory}/it</cloneProjectsTo>
+          <settingsFile>${main.basedir}/src/it/settings.xml</settingsFile>
+          <profiles>
+            <profile>!release</profile>
+          </profiles>
+          <useLocalRepository>true</useLocalRepository>
+          <localRepositoryPath>${project.build.directory}/local-repo</localRepositoryPath>
+          <postBuildHookScript>verify</postBuildHookScript>
+          <addTestClassPath>true</addTestClassPath>
+          <skipInvocation>${skipTests}</skipInvocation>
+          <streamLogs>true</streamLogs>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>install</goal>
+              <goal>run</goal>
             </goals>
           </execution>
         </executions>
@@ -286,16 +358,21 @@
           </mapping>
           <excludes>
             <exclude>.travis.yml</exclude>
-            <exclude>.gitignore</exclude>
             <exclude>.editorconfig</exclude>
+            <exclude>.gitattributes</exclude>
+            <exclude>.gitignore</exclude>
             <exclude>.mvn/**</exclude>
             <exclude>mvnw*</exclude>
             <exclude>etc/header.txt</exclude>
             <exclude>**/.idea/**</exclude>
+            <exclude>**/.editorconfig</exclude>
+            <exclude>**/log4j2.properties</exclude>
             <exclude>LICENSE</exclude>
+            <exclude>NOTICE</exclude>
             <exclude>**/*.md</exclude>
+            <exclude>**/*.bnd</exclude>
             <exclude>src/test/resources/**</exclude>
-            <exclude>src/main/resources/**</exclude>
+            <exclude>src/test/proto/**</exclude>
           </excludes>
           <strictCheck>true</strictCheck>
         </configuration>
@@ -328,7 +405,7 @@
             <configuration>
               <rules>
                 <requireJavaVersion>
-                  <version>[11,12)</version>
+                  <version>[11,14)</version>
                 </requireJavaVersion>
               </rules>
             </configuration>
@@ -356,14 +433,21 @@
               </execution>
             </executions>
           </plugin>
-          <!-- Creates javadoc jar -->
+          <!-- Creates javadoc jar, skipping internal classes -->
           <plugin>
             <artifactId>maven-javadoc-plugin</artifactId>
             <version>${maven-javadoc-plugin.version}</version>
             <configuration>
+              <sourceFileExcludes>
+                <exclude>**/internal/*.java</exclude>
+                <exclude>**/Internal*.java</exclude>
+              </sourceFileExcludes>
+              <excludePackageNames>*.internal.*</excludePackageNames>
               <failOnError>false</failOnError>
               <!-- hush pedantic warnings: we don't put param and return on everything! -->
               <doclint>none</doclint>
+              <!-- While we publish modules, our source is pre-Java9 so tell javadoc that. -->
+              <source>8</source>
             </configuration>
             <executions>
               <execution>
@@ -410,6 +494,62 @@
                     </processorPath>
                   </annotationProcessorPaths>
                 </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>module-info</id>
+      <!-- Build profiles can only consider static properties, such as files or ENV variables.
+           To conditionally add module information, we use existence of bnd.bnd. This allows
+           irrelevant packages such as tests and benchmarks to quietly opt-out.
+           http://maven.apache.org/guides/introduction/introduction-to-profiles.html -->
+      <activation>
+        <file>
+          <exists>bnd.bnd</exists>
+        </file>
+      </activation>
+      <build>
+        <plugins>
+          <!-- OSGi and Java Modules configuration -->
+          <plugin>
+            <groupId>org.apache.felix</groupId>
+            <artifactId>maven-bundle-plugin</artifactId>
+            <version>${maven-bundle-plugin.version}</version>
+            <configuration>
+              <obrRepository>NONE</obrRepository>
+              <instructions>
+                <_include>-bnd.bnd</_include>
+              </instructions>
+            </configuration>
+            <executions>
+              <execution>
+                <phase>process-classes</phase>
+                <goals>
+                  <goal>manifest</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <artifactId>maven-jar-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>default-jar</id>
+                <configuration>
+                  <archive>
+                    <!-- Include the MANIFEST.MF maven-bundle-plugin generates from bnd.bnd -->
+                    <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+                    <manifestEntries>
+                      <Automatic-Module-Name>${module.name}</Automatic-Module-Name>
+                    </manifestEntries>
+                  </archive>
+                </configuration>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
               </execution>
             </executions>
           </plugin>

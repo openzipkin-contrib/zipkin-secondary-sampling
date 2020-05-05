@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -13,9 +13,9 @@
  */
 package brave.secondary_sampling;
 
+import brave.internal.Nullable;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.jetbrains.annotations.Nullable;
 import zipkin2.Callback;
 import zipkin2.Span;
 import zipkin2.reporter.Reporter;
@@ -27,11 +27,11 @@ import static java.util.Collections.singletonList;
  * This is a simulation of <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md#the-trace-forwarder">Trace
  * Forwarder</a>.
  *
- * <p>Specifically, this processes the {@link SecondarySamplingFinishedSpanHandler#tagName
- * sampled_keys tag} created by the {@link SecondarySamplingFinishedSpanHandler} like so.
+ * <p>Specifically, this processes the {@link SecondarySamplingSpanHandler#tagName
+ * sampled_keys tag} created by the {@link SecondarySamplingSpanHandler} like so.
  * <pre>
  *   <ol>
- *     <li>Drops the {@link SecondarySamplingFinishedSpanHandler#tagName sampled_keys tag}</li>
+ *     <li>Drops the {@link SecondarySamplingSpanHandler#tagName sampled_keys tag}</li>
  *     <li>Corrects hierarchy upon a {@code parentId} sampling key parameter as needed</li>
  *     <li>Forwards data to the sampling key participant</li>
  *   </ol>
