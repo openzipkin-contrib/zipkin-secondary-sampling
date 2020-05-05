@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -25,14 +25,14 @@ import static brave.secondary_sampling.SecondarySampling.EXTRA_FACTORY;
  * {@link SecondarySamplingState}. For each extracted sampling key, TTL and sampling takes place if
  * configured.
  */
-final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
-  final Extractor<C> delegate;
-  final Getter<C, K> getter;
+final class SecondarySamplingExtractor<R, K> implements Extractor<R> {
+  final Extractor<R> delegate;
+  final Getter<R, K> getter;
   final SecondaryProvisioner provisioner;
   final SecondarySampler sampler;
   final K samplingKey;
 
-  SecondarySamplingExtractor(SecondarySampling.Propagation<K> propagation, Getter<C, K> getter) {
+  SecondarySamplingExtractor(SecondarySampling.Propagation<K> propagation, Getter<R, K> getter) {
     this.delegate = propagation.delegate.extractor(getter);
     this.getter = getter;
     this.provisioner = propagation.secondarySampling.provisioner;
@@ -40,7 +40,7 @@ final class SecondarySamplingExtractor<C, K> implements Extractor<C> {
     this.samplingKey = propagation.samplingKey;
   }
 
-  @Override public TraceContextOrSamplingFlags extract(C request) {
+  @Override public TraceContextOrSamplingFlags extract(R request) {
     TraceContextOrSamplingFlags result = delegate.extract(request);
 
     SampledLocalMap initial = new SampledLocalMap();

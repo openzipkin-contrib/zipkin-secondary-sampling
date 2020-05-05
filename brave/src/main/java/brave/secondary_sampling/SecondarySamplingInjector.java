@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -24,22 +24,22 @@ import java.util.StringJoiner;
  * spanId} parameters for each sampled key. The Zipkin endpoint can use that span ID to correct the
  * parent hierarchy.
  */
-final class SecondarySamplingInjector<C, K> implements Injector<C> {
-  final Injector<C> delegate;
-  final Setter<C, K> setter;
+final class SecondarySamplingInjector<R, K> implements Injector<R> {
+  final Injector<R> delegate;
+  final Setter<R, K> setter;
   final K samplingKey;
 
-  SecondarySamplingInjector(SecondarySampling.Propagation<K> propagation, Setter<C, K> setter) {
+  SecondarySamplingInjector(SecondarySampling.Propagation<K> propagation, Setter<R, K> setter) {
     this.delegate = propagation.delegate.injector(setter);
     this.setter = setter;
     this.samplingKey = propagation.samplingKey;
   }
 
-  @Override public void inject(TraceContext traceContext, C carrier) {
-    delegate.inject(traceContext, carrier);
+  @Override public void inject(TraceContext traceContext, R request) {
+    delegate.inject(traceContext, request);
     Extra extra = traceContext.findExtra(Extra.class);
     if (extra == null || extra.isEmpty()) return;
-    setter.put(carrier, samplingKey, serializeWithSpanId(extra, traceContext.spanIdString()));
+    setter.put(request, samplingKey, serializeWithSpanId(extra, traceContext.spanIdString()));
   }
 
   static String serializeWithSpanId(Extra extra, String spanId) {

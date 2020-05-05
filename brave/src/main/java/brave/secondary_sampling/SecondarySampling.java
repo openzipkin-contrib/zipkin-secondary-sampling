@@ -248,12 +248,12 @@ public final class SecondarySampling
       return keys;
     }
 
-    @Override public <C> TraceContext.Injector<C> injector(Setter<C, K> setter) {
+    @Override public <R> TraceContext.Injector<R> injector(Setter<R, K> setter) {
       if (setter == null) throw new NullPointerException("setter == null");
       return new SecondarySamplingInjector<>(this, setter);
     }
 
-    @Override public <C> TraceContext.Extractor<C> extractor(Getter<C, K> getter) {
+    @Override public <R> TraceContext.Extractor<R> extractor(Getter<R, K> getter) {
       if (getter == null) throw new NullPointerException("getter == null");
       return new SecondarySamplingExtractor<>(this, getter);
     }
