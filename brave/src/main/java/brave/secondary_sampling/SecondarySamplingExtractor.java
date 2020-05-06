@@ -17,7 +17,7 @@ import brave.propagation.Propagation.Getter;
 import brave.propagation.TraceContext.Extractor;
 import brave.propagation.TraceContextOrSamplingFlags;
 
-import static brave.secondary_sampling.SecondarySampling.EXTRA_HANDLER;
+import static brave.secondary_sampling.SecondarySampling.EXTRA_FACTORY;
 
 /**
  * This extracts the {@link SecondarySampling#fieldName sampling header}, and parses it a list of
@@ -40,10 +40,9 @@ final class SecondarySamplingExtractor<R> implements Extractor<R> {
   }
 
   @Override public TraceContextOrSamplingFlags extract(R request) {
-    TraceContextOrSamplingFlags result = delegate.extract(request);
-
-    TraceContextOrSamplingFlags.Builder builder = result.toBuilder();
-    SecondarySamplingDecisions initial = EXTRA_HANDLER.provisionExtra(builder);
+    TraceContextOrSamplingFlags.Builder builder = delegate.extract(request).toBuilder();
+    SecondarySamplingDecisions initial = EXTRA_FACTORY.create();
+    builder.addExtra(initial);
 
     provisioner.provision(request, initial);
 

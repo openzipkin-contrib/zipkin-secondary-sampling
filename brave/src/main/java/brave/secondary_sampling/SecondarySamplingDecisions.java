@@ -14,30 +14,30 @@
 package brave.secondary_sampling;
 
 import brave.internal.baggage.Extra;
-import brave.internal.baggage.ExtraHandler;
+import brave.internal.baggage.ExtraFactory;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
 final class SecondarySamplingDecisions
-    extends Extra<SecondarySamplingDecisions, SecondarySamplingDecisions.Handler>
+    extends Extra<SecondarySamplingDecisions, SecondarySamplingDecisions.Factory>
     implements SecondaryProvisioner.Callback {
 
-  static final class Handler extends ExtraHandler<SecondarySamplingDecisions, Handler> {
-    Handler() {
+  static final class Factory extends ExtraFactory<SecondarySamplingDecisions, Factory> {
+    Factory() {
       super(Collections.emptyMap());
     }
 
-    @Override protected SecondarySamplingDecisions provisionExtra() {
+    @Override protected SecondarySamplingDecisions create() {
       return new SecondarySamplingDecisions(this);
     }
   }
 
   boolean sampledLocal = false;
 
-  SecondarySamplingDecisions(Handler handler) {
-    super(handler);
+  SecondarySamplingDecisions(Factory factory) {
+    super(factory);
   }
 
   Map<SecondarySamplingState, Boolean> map() {

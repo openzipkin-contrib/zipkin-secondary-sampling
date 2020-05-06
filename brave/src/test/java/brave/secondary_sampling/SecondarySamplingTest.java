@@ -133,7 +133,7 @@ public class SecondarySamplingTest {
   }
 
   @Test public void injectWritesNewLastParentWhenSampled() {
-    SecondarySamplingDecisions extra = SecondarySampling.EXTRA_HANDLER.provisionExtra();
+    SecondarySamplingDecisions extra = SecondarySampling.EXTRA_FACTORY.create();
     extra.addSamplingState(SecondarySamplingState.create(MutableSecondarySamplingState.create("gatewayplay")
       .parameter("spanId", notSpanId)), false);
     extra.addSamplingState(SecondarySamplingState.create("links"), true);

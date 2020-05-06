@@ -24,7 +24,6 @@ import brave.sampler.RateLimitingSampler;
 import org.junit.Test;
 
 import static brave.secondary_sampling.SecondarySamplers.active;
-import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 
@@ -134,7 +133,7 @@ public class SecondarySamplingStateTest {
   }
 
   @Test public void injectWritesNewLastParentWhenSampled() {
-    SecondarySamplingDecisions extra = SecondarySampling.EXTRA_HANDLER.provisionExtra();
+    SecondarySamplingDecisions extra = SecondarySampling.EXTRA_FACTORY.create();
     extra.addSamplingState(SecondarySamplingState.create(MutableSecondarySamplingState.create("gatewayplay")
       .parameter("spanId", notSpanId)), false);
     extra.addSamplingState(SecondarySamplingState.create("links"), true);
