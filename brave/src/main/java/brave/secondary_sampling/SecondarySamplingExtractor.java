@@ -17,8 +17,6 @@ import brave.propagation.Propagation.Getter;
 import brave.propagation.TraceContext.Extractor;
 import brave.propagation.TraceContextOrSamplingFlags;
 
-import static brave.secondary_sampling.SecondarySampling.EXTRA_FACTORY;
-
 /**
  * This extracts the {@link SecondarySampling#fieldName sampling header}, and parses it a list of
  * {@link SecondarySamplingState}. For each extracted sampling key, TTL and sampling takes place if
@@ -41,7 +39,7 @@ final class SecondarySamplingExtractor<R> implements Extractor<R> {
 
   @Override public TraceContextOrSamplingFlags extract(R request) {
     TraceContextOrSamplingFlags.Builder builder = delegate.extract(request).toBuilder();
-    SecondarySamplingDecisions initial = EXTRA_FACTORY.create();
+    SecondarySamplingDecisions initial = SecondarySamplingDecisions.FACTORY.create();
     builder.addExtra(initial);
 
     provisioner.provision(request, initial);
@@ -55,7 +53,7 @@ final class SecondarySamplingExtractor<R> implements Extractor<R> {
       }
     }
 
-    if (initial.sampledLocal) builder.sampledLocal();
+    if (initial.sampledLocal()) builder.sampledLocal();
     return builder.build();
   }
 

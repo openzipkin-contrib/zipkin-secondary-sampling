@@ -46,7 +46,7 @@ final class SecondarySamplingSpanHandler extends brave.handler.FinishedSpanHandl
         parentId = null;
       }
 
-      extra.map().forEach((state, sampled) -> {
+      extra.asReadOnlyMap().forEach((state, sampled) -> {
         if (!sampled) return;
         String upstreamSpanId = state.parameter("spanId");
         if (parentId != null && !parentId.equals(upstreamSpanId)) {

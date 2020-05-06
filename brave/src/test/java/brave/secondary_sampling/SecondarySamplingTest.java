@@ -70,7 +70,7 @@ public class SecondarySamplingTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(serverRequest);
     SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
 
-    assertThat(extra.map())
+    assertThat(extra.asReadOnlyMap())
       // no TTL left for the next hop
       .containsEntry(SecondarySamplingState.create("authcache"), true)
       // not sampled because there's no trigger for links
@@ -107,7 +107,7 @@ public class SecondarySamplingTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(serverRequest);
     SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
 
-    assertThat(extra.map()).containsOnly(
+    assertThat(extra.asReadOnlyMap()).containsOnly(
       entry(SecondarySamplingState.create("links"), true),
       // authcache triggers a ttl
       entry(SecondarySamplingState.create(MutableSecondarySamplingState.create("authcache")
@@ -124,7 +124,7 @@ public class SecondarySamplingTest {
     TraceContextOrSamplingFlags extracted = extractor.extract(serverRequest);
     SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
 
-    assertThat(extra.map())
+    assertThat(extra.asReadOnlyMap())
       // not sampled due to config, rather from TTL: note it is decremented
       .containsEntry(SecondarySamplingState.create(MutableSecondarySamplingState.create("authcache")
         .parameter("ttl", "1")), true)
@@ -133,7 +133,7 @@ public class SecondarySamplingTest {
   }
 
   @Test public void injectWritesNewLastParentWhenSampled() {
-    SecondarySamplingDecisions extra = SecondarySampling.EXTRA_FACTORY.create();
+    SecondarySamplingDecisions extra = SecondarySamplingDecisions.FACTORY.create();
     extra.addSamplingState(SecondarySamplingState.create(MutableSecondarySamplingState.create("gatewayplay")
       .parameter("spanId", notSpanId)), false);
     extra.addSamplingState(SecondarySamplingState.create("links"), true);

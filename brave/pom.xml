@@ -86,10 +86,10 @@
                 <filter>
                   <artifact>${brave.groupId}:brave</artifact>
                   <includes>
-                    <include>brave/internal/ExtraFactory*.class</include>
-                    <include>brave/internal/MapPropagationFields*.class</include>
-                    <include>brave/internal/PropagationFields*.class</include>
-                    <include>brave/internal/PropagationFieldsFactory*.class</include>
+                    <include>brave/internal/extra/*.class</include>
+                    <include>brave/internal/collect/Lists*.class</include>
+                    <include>brave/internal/collect/LongBitSet*.class</include>
+                    <include>brave/internal/collect/UnsafeArrayMap*.class</include>
                   </includes>
                 </filter>
               </filters>
@@ -100,6 +100,7 @@
                   <excludes>
                     <!-- InternalPropagation only works when instantiated by brave itself -->
                     <exclude>brave.internal.InternalPropagation</exclude>
+                    <exclude>brave.internal.Platform</exclude>
                   </excludes>
                 </relocation>
               </relocations>

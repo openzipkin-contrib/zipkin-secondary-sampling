@@ -13,20 +13,26 @@
  */
 package brave.secondary_sampling;
 
-import brave.internal.baggage.Extra;
-import brave.internal.baggage.ExtraFactory;
-import java.util.Collections;
-import java.util.LinkedHashMap;
+import brave.internal.extra.MapExtra;
+import brave.internal.extra.MapExtraFactory;
 import java.util.Map;
-import java.util.Map.Entry;
 
-final class SecondarySamplingDecisions
-    extends Extra<SecondarySamplingDecisions, SecondarySamplingDecisions.Factory>
+final class SecondarySamplingDecisions extends
+    MapExtra<SecondarySamplingState, Boolean, SecondarySamplingDecisions, SecondarySamplingDecisions.Factory>
     implements SecondaryProvisioner.Callback {
+  static final Factory FACTORY = new FactoryBuilder().maxDynamicEntries(32).build();
 
-  static final class Factory extends ExtraFactory<SecondarySamplingDecisions, Factory> {
-    Factory() {
-      super(Collections.emptyMap());
+  static final class FactoryBuilder extends
+      MapExtraFactory.Builder<SecondarySamplingState, Boolean, SecondarySamplingDecisions, Factory, FactoryBuilder> {
+    @Override protected Factory build() {
+      return new Factory(this);
+    }
+  }
+
+  static final class Factory extends
+      MapExtraFactory<SecondarySamplingState, Boolean, SecondarySamplingDecisions, Factory> {
+    Factory(FactoryBuilder builder) {
+      super(builder);
     }
 
     @Override protected SecondarySamplingDecisions create() {
@@ -34,56 +40,27 @@ final class SecondarySamplingDecisions
     }
   }
 
-  boolean sampledLocal = false;
-
   SecondarySamplingDecisions(Factory factory) {
     super(factory);
   }
 
-  Map<SecondarySamplingState, Boolean> map() {
-    return (Map<SecondarySamplingState, Boolean>) state;
-  }
-
-  boolean isEmpty() {
-    return map().isEmpty();
-  }
-
   @Override public void addSamplingState(SecondarySamplingState state, boolean sampled) {
-    Map<SecondarySamplingState, Boolean> map = map();
-    if (map.containsKey(state)) {
-      // redundant: log and continue
-      return;
-    }
-    if (sampled) sampledLocal = true;
-    if (map.isEmpty()) this.state = map = new LinkedHashMap<>();
-    map.put(state, sampled);
+    if (get(state) == null) put(state, sampled);
   }
 
-  @Override
-  protected void mergeStateKeepingOursOnConflict(SecondarySamplingDecisions theirDecisions) {
-    Map<SecondarySamplingState, Boolean> ourDecisions = map();
-    boolean dirty = false;
-    for (Entry<SecondarySamplingState, Boolean> theirDecision : theirDecisions.map().entrySet()) {
-      Boolean ourDecision = ourDecisions.get(theirDecision.getKey());
-      if (ourDecision != null) continue; // prefer our decision
-      if (!dirty) {
-        ourDecisions = new LinkedHashMap<>(ourDecisions);
-        dirty = true;
-      }
-      ourDecisions.put(theirDecision.getKey(), theirDecision.getValue());
-    }
-    if (dirty) state = ourDecisions;
+  @Override protected boolean isEmpty() {
+    return super.isEmpty();
   }
 
-  @Override protected boolean stateEquals(Object o) {
-    return map().equals(o);
+  @Override protected Boolean get(SecondarySamplingState key) { // exposed for tests
+    return super.get(key);
   }
 
-  @Override protected int stateHashCode() {
-    return map().hashCode();
+  @Override protected Map<SecondarySamplingState, Boolean> asReadOnlyMap() {
+    return super.asReadOnlyMap();
   }
 
-  @Override protected String stateString() {
-    return map().toString();
+  boolean sampledLocal() {
+    return asReadOnlyMap().containsValue(true);
   }
 }

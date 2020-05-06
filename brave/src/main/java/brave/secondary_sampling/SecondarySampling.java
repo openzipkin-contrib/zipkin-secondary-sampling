@@ -39,9 +39,6 @@ import java.util.Locale;
  */
 public final class SecondarySampling extends Propagation.Factory
     implements TracingCustomizer, HttpTracingCustomizer, RpcTracingCustomizer, Propagation<String> {
-  static final SecondarySamplingDecisions.Factory EXTRA_FACTORY =
-      new SecondarySamplingDecisions.Factory();
-
   public static Builder newBuilder() {
     return new Builder();
   }
@@ -183,7 +180,7 @@ public final class SecondarySampling extends Propagation.Factory
 
   @Override public TraceContext decorate(TraceContext context) {
     TraceContext result = delegateFactory.decorate(context);
-    return EXTRA_FACTORY.decorate(result);
+    return SecondarySamplingDecisions.FACTORY.decorate(result);
   }
 
   @Override public <R> Injector<R> injector(Setter<R, String> setter) {

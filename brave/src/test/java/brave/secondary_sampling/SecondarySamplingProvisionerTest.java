@@ -38,8 +38,7 @@ public class SecondarySamplingProvisionerTest {
     assertThat(extracted.sampledLocal()).isTrue();
 
     SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
-    assertThat(extra.map())
-      .containsEntry(SecondarySamplingState.create("license100pct"), true);
+    assertThat(extra.get(SecondarySamplingState.create("license100pct"))).isTrue();
   }
 
   /** This shows if the provisioner mistakenly adds the same key twice, the first wins. */
@@ -62,7 +61,7 @@ public class SecondarySamplingProvisionerTest {
     assertThat(extracted.sampledLocal()).isFalse();
 
     SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
-    assertThat(extra.map().keySet())
+    assertThat(extra.asReadOnlyMap().keySet())
       .usingFieldByFieldElementComparator() // SecondarySamplingState.equals ignores params
       .containsExactly(SecondarySamplingState.create("license100pct"));
   }
@@ -82,7 +81,7 @@ public class SecondarySamplingProvisionerTest {
     assertThat(extracted.sampledLocal()).isTrue();
 
     SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
-    assertThat(extra.map().keySet())
+    assertThat(extra.asReadOnlyMap().keySet())
       .usingFieldByFieldElementComparator() // SecondarySamplingState.equals ignores params
       .containsExactly(SecondarySamplingState.create("license100pct"));
   }
@@ -99,8 +98,7 @@ public class SecondarySamplingProvisionerTest {
     assertThat(extracted.sampledLocal()).isFalse();
 
     SecondarySamplingDecisions extra = (SecondarySamplingDecisions) extracted.extra().get(0);
-    assertThat(extra.map())
-      .containsEntry(SecondarySamplingState.create("license100pct"), false);
+    assertThat(extra.asReadOnlyMap().get(SecondarySamplingState.create("license100pct"))).isFalse();
   }
 
   static Extractor<HttpServerRequest> extractor(SecondaryProvisioner provisioner) {

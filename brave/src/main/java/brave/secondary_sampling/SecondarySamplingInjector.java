@@ -43,7 +43,7 @@ final class SecondarySamplingInjector<R> implements Injector<R> {
 
   static String serializeWithSpanId(SecondarySamplingDecisions decisions, String spanId) {
     StringJoiner joiner = new StringJoiner(",");
-    decisions.map()
+    decisions.asReadOnlyMap()
         .forEach((state, sampled) -> joiner.merge(serializeWithSpanId(state, sampled, spanId)));
     return joiner.toString();
   }

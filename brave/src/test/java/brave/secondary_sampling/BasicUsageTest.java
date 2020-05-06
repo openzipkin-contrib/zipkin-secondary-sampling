@@ -106,7 +106,7 @@ public class BasicUsageTest {
 
   // hack until https://github.com/openzipkin-contrib/zipkin-secondary-sampling/issues/12
   static boolean isSampled(TraceContext context, String samplingKey) {
-    return Boolean.TRUE.equals(context.findExtra(SecondarySamplingDecisions.class).map()
+    return Boolean.TRUE.equals(context.findExtra(SecondarySamplingDecisions.class)
         .get(SecondarySamplingState.create(samplingKey)));
   }
 }
