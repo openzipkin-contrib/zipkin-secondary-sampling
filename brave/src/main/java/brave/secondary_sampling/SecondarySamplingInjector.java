@@ -16,7 +16,6 @@ package brave.secondary_sampling;
 import brave.propagation.Propagation.Setter;
 import brave.propagation.TraceContext;
 import brave.propagation.TraceContext.Injector;
-import brave.secondary_sampling.SecondarySampling.Extra;
 import java.util.StringJoiner;
 
 /**
@@ -24,32 +23,33 @@ import java.util.StringJoiner;
  * spanId} parameters for each sampled key. The Zipkin endpoint can use that span ID to correct the
  * parent hierarchy.
  */
-final class SecondarySamplingInjector<R, K> implements Injector<R> {
+final class SecondarySamplingInjector<R> implements Injector<R> {
   final Injector<R> delegate;
-  final Setter<R, K> setter;
-  final K samplingKey;
+  final Setter<R, String> setter;
+  final String fieldName;
 
-  SecondarySamplingInjector(SecondarySampling.Propagation<K> propagation, Setter<R, K> setter) {
-    this.delegate = propagation.delegate.injector(setter);
+  SecondarySamplingInjector(SecondarySampling secondarySampling, Setter<R, String> setter) {
+    this.delegate = secondarySampling.delegate.injector(setter);
     this.setter = setter;
-    this.samplingKey = propagation.samplingKey;
+    this.fieldName = secondarySampling.fieldName;
   }
 
   @Override public void inject(TraceContext traceContext, R request) {
     delegate.inject(traceContext, request);
-    Extra extra = traceContext.findExtra(Extra.class);
-    if (extra == null || extra.isEmpty()) return;
-    setter.put(request, samplingKey, serializeWithSpanId(extra, traceContext.spanIdString()));
+    SecondarySamplingDecisions decisions = traceContext.findExtra(SecondarySamplingDecisions.class);
+    if (decisions == null || decisions.isEmpty()) return;
+    setter.put(request, fieldName, serializeWithSpanId(decisions, traceContext.spanIdString()));
   }
 
-  static String serializeWithSpanId(Extra extra, String spanId) {
+  static String serializeWithSpanId(SecondarySamplingDecisions decisions, String spanId) {
     StringJoiner joiner = new StringJoiner(",");
-    extra.forEach((state, sampled) -> joiner.merge(serializeWithSpanId(state, sampled, spanId)));
+    decisions.asReadOnlyMap()
+        .forEach((state, sampled) -> joiner.merge(serializeWithSpanId(state, sampled, spanId)));
     return joiner.toString();
   }
 
   static StringJoiner serializeWithSpanId(SecondarySamplingState state, boolean sampled,
-    String spanId) {
+      String spanId) {
     StringJoiner joiner = new StringJoiner(";");
     joiner.add(state.samplingKey());
 

@@ -41,10 +41,10 @@
     <!--    <brave.groupId>com.github.openzipkin.brave</brave.groupId>-->
     <!--    <brave.version>master-SNAPSHOT</brave.version>-->
     <brave.groupId>io.zipkin.brave</brave.groupId>
-    <brave.version>5.10.2</brave.version>
+    <brave.version>5.12.1</brave.version>
 
     <!-- until we are off internals, brave/src/it needs to check we don't drift -->
-    <brave.run.version>5.11.2</brave.run.version>
+    <brave.run.version>${brave.version}</brave.run.version>
 
     <!-- override to set exclusions per-project -->
     <errorprone.args />

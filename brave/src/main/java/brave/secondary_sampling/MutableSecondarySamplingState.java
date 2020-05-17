@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -14,6 +14,8 @@
 package brave.secondary_sampling;
 
 import brave.internal.Nullable;
+import brave.internal.codec.EntrySplitter;
+import brave.internal.codec.EntrySplitter.Handler;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -31,7 +33,19 @@ import java.util.Map;
  */
 // naming convention is like MutableSpan. Unlike a builder, this allows readback.
 public final class MutableSecondarySamplingState {
-  public static final MutableSecondarySamplingState create(String samplingKey) {
+  static final EntrySplitter PARAMETER_SPLITTER = EntrySplitter.newBuilder()
+      .entrySeparator(';')
+      .keyValueSeparator('=')
+      .build();
+  static final Handler<MutableSecondarySamplingState> HANDLER =
+      (target, input, beginKey, endKey, beginValue, endValue) -> {
+        String key = input.substring(beginKey, endKey);
+        String value = input.substring(beginValue, endValue);
+        target.parameter(key, value);
+        return true;
+      };
+
+  public static MutableSecondarySamplingState create(String samplingKey) {
     if (samplingKey == null) throw new NullPointerException("samplingKey == null");
     if (samplingKey.isEmpty()) throw new IllegalArgumentException("samplingKey is empty");
     return new MutableSecondarySamplingState(samplingKey);
@@ -43,12 +57,12 @@ public final class MutableSecondarySamplingState {
    */
   // Like Accept header, parameters are after semi-colon and themselves semi-colon delimited.
   public static MutableSecondarySamplingState parse(String entry) {
-    String[] nameParameters = entry.split(";", 100);
-    MutableSecondarySamplingState result = create(nameParameters[0]);
-    for (int i = 1; i < nameParameters.length; i++) {
-      String[] nameValue = nameParameters[i].split("=", 2);
-      result.parameter(nameValue[0], nameValue[1]);
-    }
+    int indexOfParameters = entry.indexOf(';');
+    if (indexOfParameters == -1) return MutableSecondarySamplingState.create(entry);
+
+    MutableSecondarySamplingState result =
+        MutableSecondarySamplingState.create(entry.substring(0, indexOfParameters));
+    PARAMETER_SPLITTER.parse(HANDLER, result, entry, indexOfParameters, entry.length());
     return result;
   }
 

@@ -15,34 +15,34 @@ package brave.secondary_sampling;
 
 import brave.Tracing;
 import brave.TracingCustomizer;
+import brave.handler.SpanHandler;
 import brave.http.HttpRequest;
 import brave.http.HttpTracing;
 import brave.http.HttpTracingCustomizer;
-import brave.internal.MapPropagationFields;
 import brave.internal.Nullable;
-import brave.internal.PropagationFieldsFactory;
+import brave.internal.propagation.StringPropagationAdapter;
 import brave.propagation.Propagation;
-import brave.propagation.Propagation.KeyFactory;
 import brave.propagation.TraceContext;
+import brave.propagation.TraceContext.Extractor;
+import brave.propagation.TraceContext.Injector;
 import brave.rpc.RpcRequest;
 import brave.rpc.RpcTracing;
 import brave.rpc.RpcTracingCustomizer;
 import brave.sampler.SamplerFunction;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.Set;
+import zipkin2.reporter.brave.ZipkinSpanHandler;
 
 /**
  * This is a <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">Secondary
  * Sampling</a> proof of concept.
  */
-public final class SecondarySampling
-  extends Propagation.Factory
-  implements TracingCustomizer, HttpTracingCustomizer, RpcTracingCustomizer {
-  static final ExtraFactory EXTRA_FACTORY = new ExtraFactory();
-
+public final class SecondarySampling extends Propagation.Factory
+    implements TracingCustomizer, HttpTracingCustomizer, RpcTracingCustomizer, Propagation<String> {
   public static Builder newBuilder() {
     return new Builder();
   }
@@ -144,8 +144,11 @@ public final class SecondarySampling
     }
   }
 
+  final Propagation.Factory delegateFactory;
+  final Propagation<String> delegate;
+  final List<String> keyNames;
   final String fieldName, tagName;
-  final Propagation.Factory delegate;
+
   final SecondaryProvisioner provisioner;
   // TODO: it may be possible to make a parameterized primary sampler that just checks the input
   // type instead of having a separate type for http, rpc etc.
@@ -154,37 +157,70 @@ public final class SecondarySampling
   final SecondarySampler secondarySampler;
 
   SecondarySampling(Builder builder) {
+    this.delegateFactory = builder.propagationFactory;
+    this.delegate = builder.propagationFactory.get();
     this.fieldName = builder.fieldName;
     this.tagName = builder.tagName;
-    this.delegate = builder.propagationFactory;
     this.provisioner = builder.provisioner;
     this.httpServerSampler = builder.httpServerSampler;
     this.rpcServerSampler = builder.rpcServerSampler;
     this.secondarySampler = builder.secondarySampler;
+    ArrayList<String> keys = new ArrayList<>(delegate.keys());
+    keys.add(fieldName);
+    this.keyNames = Collections.unmodifiableList(keys);
+  }
+
+  @Override public List<String> keys() {
+    return keyNames;
   }
 
   @Override public boolean supportsJoin() {
-    return delegate.supportsJoin();
-  }
-
-  @Override public <K> Propagation<K> create(KeyFactory<K> keyFactory) {
-    if (keyFactory == null) throw new NullPointerException("keyFactory == null");
-    return new Propagation<>(delegate.create(keyFactory), keyFactory.create(fieldName), this);
+    return delegateFactory.supportsJoin();
   }
 
   @Override public boolean requires128BitTraceId() {
-    return delegate.requires128BitTraceId();
+    return delegateFactory.requires128BitTraceId();
   }
 
   @Override public TraceContext decorate(TraceContext context) {
-    TraceContext result = delegate.decorate(context);
-    return EXTRA_FACTORY.decorate(result);
+    TraceContext result = delegateFactory.decorate(context);
+    return SecondarySamplingDecisions.FACTORY.decorate(result);
+  }
+
+  @Override public Propagation<String> get() {
+    return this;
+  }
+
+  @Override public <K> Propagation<K> create(KeyFactory<K> keyFactory) {
+    return StringPropagationAdapter.create(this, keyFactory);
+  }
+
+  @Override public <R> Injector<R> injector(Setter<R, String> setter) {
+    if (setter == null) throw new NullPointerException("setter == null");
+    return new SecondarySamplingInjector<>(this, setter);
+  }
+
+  @Override public <R> Extractor<R> extractor(Getter<R, String> getter) {
+    if (getter == null) throw new NullPointerException("getter == null");
+    return new SecondarySamplingExtractor<>(this, getter);
   }
 
   @Override public void customize(Tracing.Builder builder) {
-    builder.addFinishedSpanHandler(new SecondarySamplingSpanHandler(tagName))
-      .propagationFactory(this)
-      .alwaysReportSpans();
+    builder.propagationFactory(this);
+    Set<SpanHandler> spanHandlers = new LinkedHashSet<>(builder.spanHandlers());
+    builder.clearSpanHandlers();
+    builder.addSpanHandler(new SecondarySamplingSpanHandler(tagName));
+    ZipkinSpanHandler zipkinSpanHandler = null;
+    for (SpanHandler spanHandler : spanHandlers) {
+      if (spanHandler instanceof ZipkinSpanHandler) {
+        zipkinSpanHandler = (ZipkinSpanHandler) spanHandler;
+      } else {
+        builder.addSpanHandler(spanHandler);
+      }
+    }
+    if (zipkinSpanHandler != null) {
+      builder.addSpanHandler(zipkinSpanHandler.toBuilder().alwaysReportSpans(true).build());
+    }
   }
 
   @Override public void customize(HttpTracing.Builder builder) {
@@ -193,70 +229,6 @@ public final class SecondarySampling
 
   @Override public void customize(RpcTracing.Builder builder) {
     if (rpcServerSampler != null) builder.serverSampler(rpcServerSampler);
-  }
-
-  static final class ExtraFactory
-    extends PropagationFieldsFactory<SecondarySamplingState, Boolean, Extra> {
-    @Override public Class<Extra> type() {
-      return Extra.class;
-    }
-
-    @Override protected Extra create() {
-      return new Extra();
-    }
-
-    @Override protected Extra create(Extra parent) {
-      return new Extra(parent);
-    }
-
-    Extra create(Map<SecondarySamplingState, Boolean> initial) {
-      return initial.isEmpty() ? new Extra() : new Extra(initial);
-    }
-  }
-
-  static final class Extra extends MapPropagationFields<SecondarySamplingState, Boolean> {
-    Extra() {
-    }
-
-    // avoids copy-on-write for each keys on initial construction
-    Extra(Map<SecondarySamplingState, Boolean> initial) {
-      super(initial);
-    }
-
-    Extra(Extra parent) {
-      super(parent);
-    }
-  }
-
-  static class Propagation<K> implements brave.propagation.Propagation<K> {
-    final brave.propagation.Propagation<K> delegate;
-    final K samplingKey;
-    final SecondarySampling secondarySampling;
-    final List<K> keys;
-
-    Propagation(brave.propagation.Propagation<K> delegate, K samplingKey,
-      SecondarySampling secondarySampling) {
-      this.delegate = delegate;
-      this.samplingKey = samplingKey;
-      this.secondarySampling = secondarySampling;
-      ArrayList<K> keys = new ArrayList<>(delegate.keys());
-      keys.add(samplingKey);
-      this.keys = Collections.unmodifiableList(keys);
-    }
-
-    @Override public List<K> keys() {
-      return keys;
-    }
-
-    @Override public <R> TraceContext.Injector<R> injector(Setter<R, K> setter) {
-      if (setter == null) throw new NullPointerException("setter == null");
-      return new SecondarySamplingInjector<>(this, setter);
-    }
-
-    @Override public <R> TraceContext.Extractor<R> extractor(Getter<R, K> getter) {
-      if (getter == null) throw new NullPointerException("getter == null");
-      return new SecondarySamplingExtractor<>(this, getter);
-    }
   }
 
   static String validateAndLowercase(String name, String title) {

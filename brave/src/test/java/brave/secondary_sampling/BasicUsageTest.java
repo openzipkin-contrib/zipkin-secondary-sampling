@@ -16,16 +16,13 @@ package brave.secondary_sampling;
 import brave.ScopedSpan;
 import brave.Span;
 import brave.Tracing;
-import brave.handler.FinishedSpanHandler;
 import brave.handler.MutableSpan;
 import brave.http.HttpClientHandler;
 import brave.http.HttpServerHandler;
 import brave.http.HttpTracing;
 import brave.propagation.B3Propagation;
 import brave.propagation.TraceContext;
-import brave.secondary_sampling.SecondarySampling.Extra;
-import java.util.ArrayList;
-import java.util.List;
+import brave.test.TestSpanHandler;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 // Do not bring any dependencies into this test without looking at src/it/pom.xml as this is used
 // to verify we don't depend on internals.
 public class BasicUsageTest {
+  TestSpanHandler spans = new TestSpanHandler();
 
   @Test public void basicUsage() {
     SecondarySampling secondarySampling = SecondarySampling.newBuilder()
@@ -43,14 +41,7 @@ public class BasicUsageTest {
         .secondarySampler((request, state) -> true)
         .build();
 
-    List<MutableSpan> spans = new ArrayList<>();
-    Tracing.Builder tracingBuilder = Tracing.newBuilder()
-        .addFinishedSpanHandler(new FinishedSpanHandler() {
-          @Override public boolean handle(TraceContext context, MutableSpan span) {
-            spans.add(span);
-            return true;
-          }
-        });
+    Tracing.Builder tracingBuilder = Tracing.newBuilder().addSpanHandler(spans);
 
     secondarySampling.customize(tracingBuilder);
 
@@ -101,12 +92,13 @@ public class BasicUsageTest {
 
   // hack until we have a local provisioning api
   static void setSampled(TraceContext context, String samplingKey) {
-    context.findExtra(Extra.class).put(SecondarySamplingState.create(samplingKey), true);
+    context.findExtra(SecondarySamplingDecisions.class)
+        .addSamplingState(SecondarySamplingState.create(samplingKey), true);
   }
 
   // hack until https://github.com/openzipkin-contrib/zipkin-secondary-sampling/issues/12
   static boolean isSampled(TraceContext context, String samplingKey) {
-    return Boolean.TRUE.equals(
-        context.findExtra(Extra.class).get(SecondarySamplingState.create(samplingKey)));
+    return Boolean.TRUE.equals(context.findExtra(SecondarySamplingDecisions.class)
+        .get(SecondarySamplingState.create(samplingKey)));
   }
 }

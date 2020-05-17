@@ -13,15 +13,12 @@
  */
 package brave.secondary_sampling;
 
+import brave.handler.MutableSpan;
+import brave.handler.SpanHandler;
 import brave.internal.Nullable;
+import brave.propagation.TraceContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import zipkin2.Callback;
-import zipkin2.Span;
-import zipkin2.reporter.Reporter;
-import zipkin2.storage.SpanConsumer;
-
-import static java.util.Collections.singletonList;
 
 /**
  * This is a simulation of <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md#the-trace-forwarder">Trace
@@ -43,50 +40,41 @@ import static java.util.Collections.singletonList;
  * parent ID is saved off as a tag {@code linkedParentId}, allowing the user, UI or other processors
  * to know the hierarchy was rewritten at that point.
  */
-public final class TraceForwarder implements Reporter<Span> {
-  public static final Callback<Void> NOOP_CALLBACK = new Callback<Void>() {
-    @Override public void onSuccess(Void aVoid) {
-    }
+public final class TraceForwarder extends SpanHandler {
+  Map<String, SpanHandler> samplingKeyToSpanHandler = new LinkedHashMap<>();
 
-    @Override public void onError(Throwable throwable) {
-    }
-  };
-  Map<String, SpanConsumer> samplingKeyToSpanConsumer = new LinkedHashMap<>();
-
-  public TraceForwarder configureSamplingKey(String samplingKey, SpanConsumer consumer) {
-    samplingKeyToSpanConsumer.put(samplingKey, consumer);
+  public TraceForwarder configureSamplingKey(String samplingKey, SpanHandler consumer) {
+    samplingKeyToSpanHandler.put(samplingKey, consumer);
     return this;
   }
 
-  @Override public void report(Span span) {
-    LinkedHashMap<String, String> tags = new LinkedHashMap<>(span.tags());
-    String sampledKeys = tags.remove("sampled_keys");
-    if (sampledKeys == null) return; // drop data not tagged properly
+  @Override public boolean end(TraceContext context, MutableSpan span, Cause cause) {
+    String sampledKeys = span.removeTag("sampled_keys");
+    if (sampledKeys == null) return false; // drop data not tagged properly
 
     // Find any parent ID matching
+    MutableSpan copy = null;
     for (String entry : sampledKeys.split(",", 100)) {
       String[] nameMetadata = entry.split(";", 100);
       String sampledKey = nameMetadata[0];
       String parentId = findParentId(nameMetadata);
 
-      if (!samplingKeyToSpanConsumer.containsKey(sampledKey)) continue; // skip when unconfigured
-
-      // retain tags unrelated to secondary sampling
-      Span.Builder builder = span.toBuilder().clearTags();
-      tags.forEach(builder::putTag);
+      if (!samplingKeyToSpanHandler.containsKey(sampledKey)) continue; // skip when unconfigured
 
       // Relink the trace to last upstream, saving the real parent ID off as a tag.
+      MutableSpan next = span;
       if (parentId != null) {
-        builder.parentId(parentId);
-        builder.putTag("linkedParentId", span.parentId());
-        builder.shared(false);
+        if (copy == null) {
+          copy = new MutableSpan(span);
+          copy.tag("linkedParentId", span.parentId());
+          copy.unsetShared();
+        }
+        copy.parentId(parentId);
       }
 
-      Span scoped = builder.build();
-      samplingKeyToSpanConsumer.get(sampledKey)
-        .accept(singletonList(scoped))
-        .enqueue(NOOP_CALLBACK);
+      samplingKeyToSpanHandler.get(sampledKey).end(context, next, cause);
     }
+    return true;
   }
 
   @Nullable static String findParentId(String[] nameMetadata) {
