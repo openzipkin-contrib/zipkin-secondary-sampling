@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -15,6 +15,7 @@ package brave.secondary_sampling.integration;
 
 import brave.Span;
 import brave.Tracing;
+import brave.handler.SpanHandler;
 import brave.http.HttpClientHandler;
 import brave.http.HttpClientRequest;
 import brave.http.HttpClientResponse;
@@ -36,7 +37,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
-import zipkin2.reporter.Reporter;
 
 class TracedNode {
   // gateway -> api -> auth -> cache  -> authdb
@@ -46,8 +46,8 @@ class TracedNode {
   //                            -> streams
   static TracedNode createServiceGraph(
     Function<String, SecondarySampling> secondarySamplingFunction,
-    Reporter<zipkin2.Span> reporter) {
-    TracedNode.Factory nodeFactory = new TracedNode.Factory(secondarySamplingFunction, reporter);
+    SpanHandler spanHandler) {
+    TracedNode.Factory nodeFactory = new TracedNode.Factory(secondarySamplingFunction, spanHandler);
     TracedNode gateway = nodeFactory.create("gateway");
     TracedNode api = nodeFactory.create("api", (path, serviceName) -> {
       if (serviceName.equals("playback")) return path.equals("/play");
@@ -73,12 +73,12 @@ class TracedNode {
 
   static class Factory {
     final Function<String, SecondarySampling> secondarySamplingFunction;
-    final Reporter<zipkin2.Span> reporter;
+    final SpanHandler spanHandler;
 
     Factory(Function<String, SecondarySampling> secondarySamplingFunction,
-      Reporter<zipkin2.Span> reporter) {
+      SpanHandler spanHandler) {
       this.secondarySamplingFunction = secondarySamplingFunction;
-      this.reporter = reporter;
+      this.spanHandler = spanHandler;
     }
 
     TracedNode create(String serviceName) {
@@ -97,7 +97,7 @@ class TracedNode {
       Tracing.Builder tracingBuilder = Tracing.newBuilder()
         .localServiceName(serviceName)
         .propagationFactory(B3SinglePropagation.FACTORY)
-        .spanReporter(reporter);
+        .addSpanHandler(spanHandler);
       if (secondarySampling != null) secondarySampling.customize(tracingBuilder);
       return tracingBuilder.build();
     }

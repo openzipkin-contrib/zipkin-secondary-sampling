@@ -15,6 +15,7 @@ package brave.secondary_sampling;
 
 import brave.Tracing;
 import brave.TracingCustomizer;
+import brave.handler.SpanHandler;
 import brave.http.HttpRequest;
 import brave.http.HttpTracing;
 import brave.http.HttpTracingCustomizer;
@@ -30,8 +31,11 @@ import brave.rpc.RpcTracingCustomizer;
 import brave.sampler.SamplerFunction;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import zipkin2.reporter.brave.ZipkinSpanHandler;
 
 /**
  * This is a <a href="https://github.com/openzipkin-contrib/zipkin-secondary-sampling/tree/master/docs/design.md">Secondary
@@ -183,6 +187,14 @@ public final class SecondarySampling extends Propagation.Factory
     return SecondarySamplingDecisions.FACTORY.decorate(result);
   }
 
+  @Override public Propagation<String> get() {
+    return this;
+  }
+
+  @Override public <K> Propagation<K> create(KeyFactory<K> keyFactory) {
+    return StringPropagationAdapter.create(this, keyFactory);
+  }
+
   @Override public <R> Injector<R> injector(Setter<R, String> setter) {
     if (setter == null) throw new NullPointerException("setter == null");
     return new SecondarySamplingInjector<>(this, setter);
@@ -193,18 +205,22 @@ public final class SecondarySampling extends Propagation.Factory
     return new SecondarySamplingExtractor<>(this, getter);
   }
 
-  @Override public Propagation<String> get() {
-    return this;
-  }
-
-  @Override public <K> Propagation<K> create(KeyFactory<K> keyFactory) {
-    return StringPropagationAdapter.create(this, keyFactory);
-  }
-
   @Override public void customize(Tracing.Builder builder) {
-    builder.addFinishedSpanHandler(new SecondarySamplingSpanHandler(tagName))
-        .propagationFactory(this)
-        .alwaysReportSpans();
+    builder.propagationFactory(this);
+    Set<SpanHandler> spanHandlers = new LinkedHashSet<>(builder.spanHandlers());
+    builder.clearSpanHandlers();
+    builder.addSpanHandler(new SecondarySamplingSpanHandler(tagName));
+    ZipkinSpanHandler zipkinSpanHandler = null;
+    for (SpanHandler spanHandler : spanHandlers) {
+      if (spanHandler instanceof ZipkinSpanHandler) {
+        zipkinSpanHandler = (ZipkinSpanHandler) spanHandler;
+      } else {
+        builder.addSpanHandler(spanHandler);
+      }
+    }
+    if (zipkinSpanHandler != null) {
+      builder.addSpanHandler(zipkinSpanHandler.toBuilder().alwaysReportSpans(true).build());
+    }
   }
 
   @Override public void customize(HttpTracing.Builder builder) {

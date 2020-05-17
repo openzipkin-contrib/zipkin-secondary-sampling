@@ -87,9 +87,11 @@
                   <artifact>${brave.groupId}:brave</artifact>
                   <includes>
                     <include>brave/internal/extra/*.class</include>
+                    <include>brave/internal/codec/EntrySplitter*.class</include>
                     <include>brave/internal/collect/Lists*.class</include>
                     <include>brave/internal/collect/LongBitSet*.class</include>
                     <include>brave/internal/collect/UnsafeArrayMap*.class</include>
+                    <include>brave/internal/propagation/StringPropagationAdapter*.class</include>
                   </includes>
                 </filter>
               </filters>

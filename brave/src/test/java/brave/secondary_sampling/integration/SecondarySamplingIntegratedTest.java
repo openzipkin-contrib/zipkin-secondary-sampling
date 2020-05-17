@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -14,6 +14,7 @@
 package brave.secondary_sampling.integration;
 
 import brave.Tracing;
+import brave.handler.MutableSpan;
 import brave.propagation.B3SinglePropagation;
 import brave.propagation.Propagation;
 import brave.sampler.RateLimitingSampler;
@@ -24,22 +25,24 @@ import brave.secondary_sampling.SamplerController;
 import brave.secondary_sampling.SecondarySampling;
 import brave.secondary_sampling.SecondarySamplingState;
 import brave.secondary_sampling.TraceForwarder;
+import brave.test.TestSpanHandler;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import org.junit.After;
 import org.junit.Test;
 import zipkin2.DependencyLink;
+import zipkin2.Endpoint;
 import zipkin2.Span;
-import zipkin2.reporter.Reporter;
-import zipkin2.storage.InMemoryStorage;
+import zipkin2.internal.DependencyLinker;
+import zipkin2.storage.GroupByTraceId;
 
 import static brave.http.HttpRequestMatchers.pathStartsWith;
 import static brave.rpc.RpcRequestMatchers.methodEquals;
 import static brave.secondary_sampling.SecondarySamplers.passive;
-import static brave.secondary_sampling.TraceForwarder.NOOP_CALLBACK;
-import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -48,19 +51,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 // intentionally not in package brave.secondary_sampling to ensure we exposed what we need
 public class SecondarySamplingIntegratedTest {
-  InMemoryStorage zipkin = InMemoryStorage.newBuilder().build();
-  InMemoryStorage gatewayplay = InMemoryStorage.newBuilder().build();
-  InMemoryStorage authcache = InMemoryStorage.newBuilder().build();
-  InMemoryStorage license = InMemoryStorage.newBuilder().build();
+  TestSpanHandler zipkin = new TestSpanHandler();
+  TestSpanHandler gatewayplay = new TestSpanHandler();
+  TestSpanHandler authcache = new TestSpanHandler();
+  TestSpanHandler license = new TestSpanHandler();
 
-  Reporter<Span> zipkinReporter = // used only in base case tests
-    s -> zipkin.spanConsumer().accept(asList(s)).enqueue(NOOP_CALLBACK);
-
-  Reporter<zipkin2.Span> traceForwarder = new TraceForwarder()
-    .configureSamplingKey("b3", zipkin.spanConsumer())
-    .configureSamplingKey("gatewayplay", gatewayplay.spanConsumer())
-    .configureSamplingKey("authcache", authcache.spanConsumer())
-    .configureSamplingKey("license100pct", license.spanConsumer());
+  TraceForwarder traceForwarder = new TraceForwarder()
+    .configureSamplingKey("b3", zipkin)
+    .configureSamplingKey("gatewayplay", gatewayplay)
+    .configureSamplingKey("authcache", authcache)
+    .configureSamplingKey("license100pct", license);
 
   Propagation.Factory b3 = B3SinglePropagation.FACTORY;
 
@@ -137,7 +137,7 @@ public class SecondarySamplingIntegratedTest {
    * <p>All other tests use {@link SamplerController} for B3 propagation rules.
    */
   @Test public void baseCase_nothingToZipkinWhenB3Unsampled() {
-    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
+    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkin);
 
     Stream.of("/recommend", "/play").forEach(path -> {
         FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
@@ -147,13 +147,13 @@ public class SecondarySamplingIntegratedTest {
       }
     );
 
-    assertThat(zipkin.getTraces()).isEmpty();
-    assertThat(gatewayplay.getTraces()).isEmpty();
-    assertThat(authcache.getTraces()).isEmpty();
+    assertThat(zipkin).isEmpty();
+    assertThat(gatewayplay).isEmpty();
+    assertThat(authcache).isEmpty();
   }
 
   @Test public void baseCase_reportsToZipkinWhenB3Sampled() {
-    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
+    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkin);
 
     Stream.of("/recommend", "/play").forEach(path -> {
         FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
@@ -164,13 +164,13 @@ public class SecondarySamplingIntegratedTest {
     );
 
     // Only reports to Zipkin
-    assertThat(zipkin.getTraces()).hasSize(2);
-    assertThat(gatewayplay.getTraces()).isEmpty();
-    assertThat(authcache.getTraces()).isEmpty();
+    assertThat(traceCount(zipkin)).isEqualTo(2);
+    assertThat(gatewayplay).isEmpty();
+    assertThat(authcache).isEmpty();
   }
 
-  @Test public void baseCase_routingToRecommendations() throws Exception { // sanity check
-    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
+  @Test public void baseCase_routingToRecommendations() { // sanity check
+    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkin);
 
     FakeHttpRequest.Client request = new FakeHttpRequest.Client("/recommend");
     request.header("b3", "1");
@@ -178,12 +178,12 @@ public class SecondarySamplingIntegratedTest {
     serviceRoot.execute(request);
 
     // Does not accidentally call playback services
-    assertThat(zipkin.getServiceNames().execute())
-      .containsExactly("api", "auth", "authdb", "cache", "gateway", "recodb", "recommendations");
+    assertThat(zipkin).extracting(MutableSpan::localServiceName)
+      .containsOnly("api", "auth", "authdb", "cache", "gateway", "recodb", "recommendations");
   }
 
-  @Test public void baseCase_routingToPlayback() throws Exception { // sanity check
-    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
+  @Test public void baseCase_routingToPlayback() { // sanity check
+    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkin);
 
     FakeHttpRequest.Client request = new FakeHttpRequest.Client("/play");
     request.header("b3", "1");
@@ -191,7 +191,7 @@ public class SecondarySamplingIntegratedTest {
     serviceRoot.execute(request);
 
     // Does not accidentally call recommendations services
-    assertThat(zipkin.getServiceNames().execute()).containsExactly(
+    assertThat(zipkin).extracting(MutableSpan::localServiceName).containsOnly(
       "api",
       "auth",
       "authdb",
@@ -206,7 +206,7 @@ public class SecondarySamplingIntegratedTest {
   }
 
   @Test public void baseCase_b3_unsampled() { // sanity check
-    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkinReporter);
+    serviceRoot = TracedNode.createServiceGraph(s -> null, zipkin);
 
     Stream.of("/recommend", "/play").forEach(path -> {
         FakeHttpRequest.Client request = new FakeHttpRequest.Client(path);
@@ -216,9 +216,9 @@ public class SecondarySamplingIntegratedTest {
       }
     );
 
-    assertThat(zipkin.getDependencies()).isEmpty();
-    assertThat(gatewayplay.getDependencies()).isEmpty();
-    assertThat(authcache.getDependencies()).isEmpty();
+    assertThat(getDependencies(zipkin)).isEmpty();
+    assertThat(getDependencies(gatewayplay)).isEmpty();
+    assertThat(getDependencies(authcache)).isEmpty();
   }
 
   @Test public void gatewayplay_b3_unsampled() {
@@ -234,18 +234,18 @@ public class SecondarySamplingIntegratedTest {
       }
     );
 
-    assertThat(zipkin.getDependencies()).isEmpty();
-    assertThat(gatewayplay.getDependencies()).containsExactly(
+    assertThat(getDependencies(zipkin)).isEmpty();
+    assertThat(getDependencies(gatewayplay)).containsExactly(
       DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
     );
-    assertThat(authcache.getDependencies()).isEmpty();
+    assertThat(getDependencies(authcache)).isEmpty();
 
     // Hit playback directly as opposed to via the gateway. This should not increase the trace count
     FakeHttpRequest.Client request = new FakeHttpRequest.Client("/play");
     request.header("sampling", "gatewayplay");
 
     serviceRoot.findDownStream("playback").execute(request);
-    assertThat(gatewayplay.getTraces()).hasSize(1);
+    assertThat(traceCount(gatewayplay)).isEqualTo(1);
   }
 
   @Test public void gatewayplay_b3_sampled() {
@@ -264,11 +264,11 @@ public class SecondarySamplingIntegratedTest {
       }
     );
 
-    assertThat(zipkin.getDependencies()).isNotEmpty();
-    assertThat(gatewayplay.getDependencies()).containsExactly( // doesn't double-count!
+    assertThat(getDependencies(zipkin)).isNotEmpty();
+    assertThat(getDependencies(gatewayplay)).containsExactly( // doesn't double-count!
       DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
     );
-    assertThat(authcache.getDependencies()).isEmpty();
+    assertThat(getDependencies(authcache)).isEmpty();
   }
 
   @Test public void authcache_b3_unsampled() {
@@ -284,9 +284,9 @@ public class SecondarySamplingIntegratedTest {
       }
     );
 
-    assertThat(zipkin.getDependencies()).isEmpty();
-    assertThat(gatewayplay.getDependencies()).isEmpty();
-    assertThat(authcache.getDependencies()).containsExactly(
+    assertThat(getDependencies(zipkin)).isEmpty();
+    assertThat(getDependencies(gatewayplay)).isEmpty();
+    assertThat(getDependencies(authcache)).containsExactly(
       DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
     );
   }
@@ -304,9 +304,9 @@ public class SecondarySamplingIntegratedTest {
       }
     );
 
-    assertThat(zipkin.getDependencies()).isNotEmpty();
-    assertThat(gatewayplay.getDependencies()).isEmpty();
-    assertThat(authcache.getDependencies()).containsExactly( // doesn't double-count!
+    assertThat(getDependencies(zipkin)).isNotEmpty();
+    assertThat(getDependencies(gatewayplay)).isEmpty();
+    assertThat(getDependencies(authcache)).containsExactly( // doesn't double-count!
       DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
     );
   }
@@ -324,11 +324,11 @@ public class SecondarySamplingIntegratedTest {
       }
     );
 
-    assertThat(zipkin.getDependencies()).isEmpty();
-    assertThat(gatewayplay.getDependencies()).containsExactly(
+    assertThat(getDependencies(zipkin)).isEmpty();
+    assertThat(getDependencies(gatewayplay)).containsExactly(
       DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
     );
-    assertThat(authcache.getDependencies()).containsExactly(
+    assertThat(getDependencies(authcache)).containsExactly(
       DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
     );
   }
@@ -346,11 +346,11 @@ public class SecondarySamplingIntegratedTest {
       }
     );
 
-    assertThat(zipkin.getDependencies()).isNotEmpty();
-    assertThat(gatewayplay.getDependencies()).containsExactly( // doesn't double-count!
+    assertThat(getDependencies(zipkin)).isNotEmpty();
+    assertThat(getDependencies(gatewayplay)).containsExactly( // doesn't double-count!
       DependencyLink.newBuilder().parent("gateway").child("playback").callCount(1).build()
     );
-    assertThat(authcache.getDependencies()).containsExactly( // doesn't double-count!
+    assertThat(getDependencies(authcache)).containsExactly( // doesn't double-count!
       DependencyLink.newBuilder().parent("auth").child("cache").callCount(2).build()
     );
   }
@@ -363,10 +363,10 @@ public class SecondarySamplingIntegratedTest {
 
     serviceRoot.execute(request);
 
-    assertThat(zipkin.getDependencies()).isEmpty();
-    assertThat(gatewayplay.getDependencies()).isEmpty();
-    assertThat(authcache.getDependencies()).isEmpty();
-    assertThat(license.getDependencies()).containsExactly(
+    assertThat(getDependencies(zipkin)).isEmpty();
+    assertThat(getDependencies(gatewayplay)).isEmpty();
+    assertThat(getDependencies(authcache)).isEmpty();
+    assertThat(getDependencies(license)).containsExactly(
       DependencyLink.newBuilder().parent("license").child("cache").callCount(1).build(),
       DependencyLink.newBuilder().parent("cache").child("licensedb").callCount(1).build()
     );
@@ -374,5 +374,32 @@ public class SecondarySamplingIntegratedTest {
 
   @After public void close() {
     Tracing.current().close();
+  }
+
+  static int traceCount(TestSpanHandler spans) {
+    return (int) spans.spans().stream().map(MutableSpan::traceId).distinct().count();
+  }
+
+  static List<DependencyLink> getDependencies(TestSpanHandler spans) {
+    DependencyLinker linker = new DependencyLinker();
+    List<Span> zipkinSpans = new ArrayList<>();
+    for (MutableSpan span : spans) {
+      Span.Builder builder = Span.newBuilder()
+          .traceId(span.traceId())
+          .parentId(span.parentId())
+          .id(span.id())
+          .kind(Span.Kind.valueOf(span.kind().name()))
+          .shared(span.shared())
+          .localEndpoint(Endpoint.newBuilder().serviceName(span.localServiceName()).build());
+      if (span.remoteServiceName() != null) {
+        builder.remoteEndpoint(Endpoint.newBuilder().serviceName(span.remoteServiceName()).build());
+      }
+      if (span.tag("error") != null) builder.putTag("error", "");
+      zipkinSpans.add(builder.build());
+    }
+    for (List<Span> trace : GroupByTraceId.create(false).map(zipkinSpans)) {
+      linker.putTrace(trace);
+    }
+    return linker.link();
   }
 }

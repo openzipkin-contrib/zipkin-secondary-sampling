@@ -26,14 +26,14 @@ import java.util.StringJoiner;
  * root, it is copied as the {@code parentId} parameter of the corresponding {@link #tagName
  * sampled_keys entry}. This allows the trace forwarder to fix the hierarchy for this participant.
  */
-final class SecondarySamplingSpanHandler extends brave.handler.FinishedSpanHandler {
+final class SecondarySamplingSpanHandler extends brave.handler.SpanHandler {
   final String tagName;
 
   SecondarySamplingSpanHandler(String tagName) {
     this.tagName = tagName;
   }
 
-  @Override public boolean handle(TraceContext context, MutableSpan span) {
+  @Override public boolean end(TraceContext context, MutableSpan span, Cause cause) {
     StringJoiner joiner = new StringJoiner(",");
     if (Boolean.TRUE.equals(context.sampled())) joiner.add("b3");
 

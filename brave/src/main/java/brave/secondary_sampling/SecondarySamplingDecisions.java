@@ -20,6 +20,7 @@ import java.util.Map;
 final class SecondarySamplingDecisions extends
     MapExtra<SecondarySamplingState, Boolean, SecondarySamplingDecisions, SecondarySamplingDecisions.Factory>
     implements SecondaryProvisioner.Callback {
+
   static final Factory FACTORY = new FactoryBuilder().maxDynamicEntries(32).build();
 
   static final class FactoryBuilder extends

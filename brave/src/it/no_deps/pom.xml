@@ -61,6 +61,11 @@
       <artifactId>assertj-core</artifactId>
       <version>@assertj.version@</version>
     </dependency>
+    <dependency>
+      <groupId>io.zipkin.brave</groupId>
+      <artifactId>brave-tests</artifactId>
+      <version>@brave.run.version@</version>
+    </dependency>
   </dependencies>
 
   <build>

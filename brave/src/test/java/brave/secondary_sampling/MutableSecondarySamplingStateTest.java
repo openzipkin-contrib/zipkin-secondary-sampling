@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The OpenZipkin Authors
+ * Copyright 2019-2020 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -16,8 +16,25 @@ package brave.secondary_sampling;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 
 public class MutableSecondarySamplingStateTest {
+  @Test public void parse() {
+    MutableSecondarySamplingState state = MutableSecondarySamplingState.parse("authcache");
+    assertThat(state.samplingKey).isEqualTo("authcache");
+    assertThat(state.parameters).isEmpty();
+  }
+
+  @Test public void parse_parameters() {
+    MutableSecondarySamplingState state =
+        MutableSecondarySamplingState.parse("authcache;ttl=1;spanId=19f84f102048e047");
+    assertThat(state.samplingKey).isEqualTo("authcache");
+    assertThat(state.parameters).containsExactly(
+        entry("ttl", "1"),
+        entry("spanId", "19f84f102048e047")
+    );
+  }
+
   @Test public void parse_ttl() {
     assertThat(MutableSecondarySamplingState.parse("authcache;ttl=-1").ttl()).isZero();
     assertThat(MutableSecondarySamplingState.parse("authcache;ttl=0").ttl()).isZero();

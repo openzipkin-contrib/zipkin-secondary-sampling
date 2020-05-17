@@ -13,6 +13,8 @@
  */
 package brave.secondary_sampling;
 
+import brave.internal.codec.EntrySplitter;
+import brave.internal.codec.EntrySplitter.Handler;
 import brave.propagation.Propagation.Getter;
 import brave.propagation.TraceContext.Extractor;
 import brave.propagation.TraceContextOrSamplingFlags;
@@ -23,6 +25,11 @@ import brave.propagation.TraceContextOrSamplingFlags;
  * configured.
  */
 final class SecondarySamplingExtractor<R> implements Extractor<R> {
+  static final EntrySplitter SPLITTER = EntrySplitter.newBuilder()
+      .keyValueSeparator(';')
+      .keyValueSeparatorRequired(false)
+      .build();
+
   final Extractor<R> delegate;
   final Getter<R, String> getter;
   final SecondaryProvisioner provisioner;
@@ -46,11 +53,8 @@ final class SecondarySamplingExtractor<R> implements Extractor<R> {
 
     String maybeValue = getter.get(request, fieldName);
     if (maybeValue != null) {
-      for (String entry : maybeValue.split(",", 100)) {
-        MutableSecondarySamplingState state = MutableSecondarySamplingState.parse(entry);
-        boolean sampled = updateStateAndSample(request, state);
-        initial.addSamplingState(SecondarySamplingState.create(state), sampled);
-      }
+      Handler<SecondarySamplingDecisions> handlerForRequest = handlerForRequest(request);
+      SPLITTER.parse(handlerForRequest, initial, maybeValue);
     }
 
     if (initial.sampledLocal()) builder.sampledLocal();
@@ -68,5 +72,20 @@ final class SecondarySamplingExtractor<R> implements Extractor<R> {
     }
 
     return ttlSampled || secondarySampler.isSampled(request, state);
+  }
+
+  /** Parses the input into {@link SecondarySamplingDecisions} */
+  Handler<SecondarySamplingDecisions> handlerForRequest(Object request) {
+    return (target, input, beginKey, endKey, beginValue, endValue) -> {
+      String key = input.substring(beginKey, endKey);
+      MutableSecondarySamplingState state = MutableSecondarySamplingState.create(key);
+      if (beginValue != endValue) {
+        MutableSecondarySamplingState.PARAMETER_SPLITTER.parse(
+            MutableSecondarySamplingState.HANDLER, state, input, beginValue, endValue);
+      }
+      boolean sampled = updateStateAndSample(request, state);
+      target.addSamplingState(SecondarySamplingState.create(state), sampled);
+      return true;
+    };
   }
 }
