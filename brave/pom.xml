@@ -99,11 +99,6 @@
                 <relocation>
                   <pattern>brave.internal</pattern>
                   <shadedPattern>brave.secondary_sampling.internal</shadedPattern>
-                  <excludes>
-                    <!-- InternalPropagation only works when instantiated by brave itself -->
-                    <exclude>brave.internal.InternalPropagation</exclude>
-                    <exclude>brave.internal.Platform</exclude>
-                  </excludes>
                 </relocation>
               </relocations>
               <transformers>
