@@ -41,7 +41,7 @@
     <!--    <brave.groupId>com.github.openzipkin.brave</brave.groupId>-->
     <!--    <brave.version>master-SNAPSHOT</brave.version>-->
     <brave.groupId>io.zipkin.brave</brave.groupId>
-    <brave.version>5.12.2</brave.version>
+    <brave.version>5.12.3</brave.version>
 
     <!-- until we are off internals, brave/src/it needs to check we don't drift -->
     <brave.run.version>${brave.version}</brave.run.version>
@@ -51,7 +51,7 @@
     <errorprone.version>2.3.4</errorprone.version>
 
     <junit.version>4.13</junit.version>
-    <assertj.version>3.15.0</assertj.version>
+    <assertj.version>3.16.1</assertj.version>
 
     <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
     <maven-install-plugin.version>3.0.0-M1</maven-install-plugin.version>
@@ -346,6 +346,7 @@
           <packageName>zipkin-secondary-sampling</packageName>
         </configuration>
       </plugin>
+
       <plugin>
         <groupId>com.mycila</groupId>
         <artifactId>license-maven-plugin</artifactId>
@@ -549,6 +550,31 @@
                 </configuration>
                 <goals>
                   <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>sonatype</id>
+      <distributionManagement>
+        <repository>
+          <id>sonatype</id>
+          <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
+        </repository>
+      </distributionManagement>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>1.6</version>
+            <executions>
+              <execution>
+                <id>sign-release-artifacts</id>
+                <goals>
+                  <goal>sign</goal>
                 </goals>
               </execution>
             </executions>
