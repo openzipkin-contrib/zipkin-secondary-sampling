@@ -1,6 +1,6 @@
-# We use brave.internal.Nullable and implicitly brave.internal.InternalPropagation
+# We use need to import to support brave.internal.InternalPropagation
+# brave.internal.Nullable is not used at runtime.
 Import-Package: \
-  !brave.internal*,\
-  *
+  brave.internal;braveinternal=true,\
 Export-Package: \
   brave.secondary_sampling
