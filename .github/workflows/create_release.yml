@@ -13,10 +13,8 @@ jobs:
   create_release:
     runs-on: ubuntu-20.04  # newest available distribution, aka focal
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 1  # only need the base commit as license check isn't run
+      - uses: actions/checkout@v2
+      - run: git fetch --no-tags --prune --depth=1 origin +refs/heads/master:refs/remotes/origin/master
       - name: Cache local Maven repository
         uses: actions/cache@v2
         with:
