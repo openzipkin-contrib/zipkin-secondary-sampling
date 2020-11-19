@@ -26,10 +26,10 @@ release_version=$(build-bin/git/version_from_trigger_tag release- ${trigger_tag}
 release_branch=${2:-master}
 
 # Checkout master, as we release from master, not a tag ref
-git checkout -t -b ${release_branch} origin/${release_branch}
+git fetch --no-tags --prune --depth=1 origin +refs/heads/${release_branch}:refs/remotes/origin/${release_branch}
+git checkout ${release_branch}
 
 # Ensure no one pushed commits since this release tag as it would fail later commands
-git fetch origin ${release_branch}:origin/${release_branch}
 commit_local_release_branch=$(git show --pretty='format:%H' ${release_branch})
 commit_remote_release_branch=$(git show --pretty='format:%H' origin/${release_branch})
 if [ "$commit_local_release_branch" != "$commit_remote_release_branch" ]; then
