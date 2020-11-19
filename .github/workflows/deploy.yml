@@ -19,11 +19,12 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1  # only needed to get the sha label
-      - name: Cache Maven Artifacts
+      - name: Cache local Maven repository
         uses: actions/cache@v2
         with:
           path: ~/.m2/repository
-          key: m2-repository-${{ hashFiles('**/pom.xml') }}
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
       - name: Configure Deploy
         run: build-bin/configure_deploy
         env:

@@ -17,11 +17,12 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1  # only need the base commit as license check isn't run
-      - name: Cache Maven Artifacts
+      - name: Cache local Maven repository
         uses: actions/cache@v2
         with:
           path: ~/.m2/repository
-          key: m2-repository-${{ hashFiles('**/pom.xml') }}
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
       - name: Configure Release
         run: build-bin/git/login_git
         env:
