@@ -35,4 +35,5 @@ jobs:
           #   - referenced in .settings.xml
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |  # GITHUB_REF will be refs/tags/release-N.M.L
-         build-bin/maven/maven_release $(echo ${GITHUB_REF} | cut -d/ -f 3)
+          build-bin/git/login_git &&
+          build-bin/maven/maven_release $(echo ${GITHUB_REF} | cut -d/ -f 3)
