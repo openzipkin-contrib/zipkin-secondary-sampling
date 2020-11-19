@@ -19,7 +19,7 @@
 
   <groupId>io.zipkin.contrib.zipkin-secondary-sampling</groupId>
   <artifactId>zipkin-secondary-sampling-parent</artifactId>
-  <version>0.3.4</version>
+  <version>0.3.5-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <modules>
@@ -97,7 +97,7 @@
     <developerConnection>
       scm:git:https://github.com/openzipkin-contrib/zipkin-secondary-sampling.git
     </developerConnection>
-    <tag>0.3.4</tag>
+    <tag>HEAD</tag>
   </scm>
 
   <!-- Developer section is needed for Maven Central, but doesn't need to include each person -->
