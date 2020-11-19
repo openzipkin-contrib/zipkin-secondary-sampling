@@ -1,5 +1,7 @@
 # brave-secondary-sampling
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.zipkin.contrib.zipkin-secondary-sampling/brave-secondary-sampling.svg)](https://search.maven.org/search?q=g:io.zipkin.contrib.zipkin-secondary-sampling%20AND%20a:brave-secondary-sampling)
+
 ## Project Setup
 
 ### Gradle
