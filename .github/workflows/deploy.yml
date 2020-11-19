@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 1  # only needed to get the sha label
       - name: Cache Maven Artifacts
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: ~/.m2/repository
           key: m2-repository-${{ hashFiles('**/pom.xml') }}

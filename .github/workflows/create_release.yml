@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 1  # only need the base commit as license check isn't run
       - name: Cache Maven Artifacts
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: ~/.m2/repository
           key: m2-repository-${{ hashFiles('**/pom.xml') }}

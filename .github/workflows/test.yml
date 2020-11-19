@@ -23,9 +23,11 @@ jobs:
         with:
           fetch-depth: 0  # full git history for license check
       - name: Cache Maven Artifacts
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: ~/.m2/repository
           key: m2-repository-${{ hashFiles('**/pom.xml') }}
+      - name: Configure Test
+        run: build-bin/configure_test
       - name: Test
-        run: build-bin/configure_test && build-bin/test
+        run: build-bin/test
