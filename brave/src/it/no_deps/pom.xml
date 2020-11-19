@@ -88,6 +88,10 @@
         </executions>
       </plugin>
       <plugin>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>@maven-jar-plugin.version@</version>
+      </plugin>
+      <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>@maven-failsafe-plugin.version@</version>
         <configuration>
