@@ -16,7 +16,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v2
         with:
-          fetch-depth: 1  # only needed to get the sha label
+          fetch-depth: 1  # only need the base commit as license check isn't run
       - name: Cache Maven Artifacts
         uses: actions/cache@v1
         with:
