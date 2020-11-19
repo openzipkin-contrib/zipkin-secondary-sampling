@@ -25,6 +25,7 @@ trigger_tag=${1?trigger_tag is required. Ex release-1.2.3}
 release_version=$(build-bin/git/version_from_trigger_tag release- ${trigger_tag})
 release_branch=${2:-master}
 
+git fetch origin/${release_branch}
 # Checkout master, as we release from master, not a tag ref
 git checkout ${release_branch} || git checkout -t -b ${release_branch} origin/${release_branch}
 
