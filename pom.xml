@@ -24,7 +24,6 @@
 
   <modules>
     <module>brave</module>
-    <module>benchmarks</module>
   </modules>
 
   <properties>
@@ -47,10 +46,10 @@
     <!--    <brave.groupId>com.github.openzipkin.brave</brave.groupId>-->
     <!--    <brave.version>master-SNAPSHOT</brave.version>-->
     <brave.groupId>io.zipkin.brave</brave.groupId>
-    <brave.version>5.12.6</brave.version>
+    <brave.version>5.13.1</brave.version>
 
-    <junit.version>4.13</junit.version>
-    <assertj.version>3.17.2</assertj.version>
+    <junit.version>4.13.1</junit.version>
+    <assertj.version>3.18.0</assertj.version>
     <!-- until we are off internals, brave/src/it needs to check we don't drift -->
     <brave.run.version>${brave.version}</brave.run.version>
 
@@ -70,6 +69,7 @@
     <maven-release-plugin.version>3.0.0-M1</maven-release-plugin.version>
     <maven-shade-plugin.version>3.2.4</maven-shade-plugin.version>
     <maven-source-plugin.version>3.2.1</maven-source-plugin.version>
+    <nexus-staging-maven-plugin.version>1.6.8</nexus-staging-maven-plugin.version>
   </properties>
 
   <name>Zipkin Secondary Sampling (Parent)</name>
@@ -115,43 +115,28 @@
   </issueManagement>
 
   <distributionManagement>
-    <repository>
-      <id>bintray</id>
-      <url>https://api.bintray.com/maven/openzipkin-contrib/maven/zipkin-secondary-sampling/;publish=1</url>
-    </repository>
     <snapshotRepository>
-      <id>jfrog-snapshots</id>
-      <url>https://oss.jfrog.org/artifactory/oss-snapshot-local</url>
+      <id>ossrh</id>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
     </snapshotRepository>
+    <repository>
+      <id>ossrh</id>
+      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
   </distributionManagement>
 
-  <!-- TODO: see if jitpack works with bom yet -->
   <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>${brave.groupId}</groupId>
-        <artifactId>brave</artifactId>
-        <version>${brave.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>${brave.groupId}</groupId>
-        <artifactId>brave-instrumentation-http</artifactId>
-        <version>${brave.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>${brave.groupId}</groupId>
-        <artifactId>brave-instrumentation-http-tests</artifactId>
-        <version>${brave.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>${brave.groupId}</groupId>
-        <artifactId>brave-instrumentation-rpc</artifactId>
-        <version>${brave.version}</version>
-      </dependency>
-    </dependencies>
+    <!-- Be careful here, especially to not import BOMs as io.zipkin.brave:brave has this parent.
+
+         For example, if you imported Netty's BOM here, using Brave would also download that BOM. As
+         Brave is indirectly used, this can be extremely confusing when people are troubleshooting
+         library version assignments. -->
   </dependencyManagement>
 
   <dependencies>
+    <!-- Do not add compile dependencies here. This can cause problems for libraries that depend on
+         io.zipkin.brave:brave difficult to unravel. -->
+
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
@@ -177,6 +162,13 @@
           <configuration>
             <maven>3.6.3</maven>
           </configuration>
+        </plugin>
+
+        <!-- mvn de.qaware.maven:go-offline-maven-plugin:resolve-dependencies -->
+        <plugin>
+          <groupId>de.qaware.maven</groupId>
+          <artifactId>go-offline-maven-plugin</artifactId>
+          <version>1.2.7</version>
         </plugin>
 
         <plugin>
@@ -287,6 +279,7 @@
           <addTestClassPath>true</addTestClassPath>
           <skipInvocation>${skipTests}</skipInvocation>
           <streamLogs>true</streamLogs>
+          <mavenOpts>-Dorg.slf4j.simpleLogger.defaultLogLevel=WARN</mavenOpts>
         </configuration>
         <executions>
           <execution>
@@ -342,65 +335,6 @@
       </plugin>
 
       <plugin>
-        <groupId>io.zipkin.centralsync-maven-plugin</groupId>
-        <artifactId>centralsync-maven-plugin</artifactId>
-        <version>0.1.1</version>
-        <configuration>
-          <subject>openzipkin-contrib</subject>
-          <repo>maven</repo>
-          <packageName>zipkin-secondary-sampling</packageName>
-        </configuration>
-      </plugin>
-
-      <plugin>
-        <groupId>com.mycila</groupId>
-        <artifactId>license-maven-plugin</artifactId>
-        <version>${license-maven-plugin.version}</version>
-        <configuration>
-          <header>${main.basedir}/src/etc/header.txt</header>
-          <mapping>
-            <!-- Don't use javadoc style as this makes code formatters break it by adding tags! -->
-            <java>SLASHSTAR_STYLE</java>
-          </mapping>
-          <excludes>
-            <exclude>.travis.yml</exclude>
-            <exclude>.editorconfig</exclude>
-            <exclude>.gitattributes</exclude>
-            <exclude>.gitignore</exclude>
-            <exclude>.mailmap</exclude>
-            <exclude>.mvn/**</exclude>
-            <exclude>mvnw*</exclude>
-            <exclude>etc/header.txt</exclude>
-            <exclude>**/.idea/**</exclude>
-            <exclude>**/.editorconfig</exclude>
-            <exclude>**/log4j2.properties</exclude>
-            <exclude>LICENSE</exclude>
-            <exclude>NOTICE</exclude>
-            <exclude>**/*.md</exclude>
-            <exclude>**/*.bnd</exclude>
-            <exclude>src/test/resources/**</exclude>
-            <exclude>src/test/proto/**</exclude>
-          </excludes>
-          <strictCheck>true</strictCheck>
-        </configuration>
-        <dependencies>
-          <dependency>
-            <groupId>com.mycila</groupId>
-            <artifactId>license-maven-plugin-git</artifactId>
-            <version>${license-maven-plugin.version}</version>
-          </dependency>
-        </dependencies>
-        <executions>
-          <execution>
-            <goals>
-              <goal>check</goal>
-            </goals>
-            <phase>compile</phase>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
         <artifactId>maven-enforcer-plugin</artifactId>
         <version>${maven-enforcer-plugin.version}</version>
         <executions>
@@ -423,52 +357,95 @@
   </build>
 
   <profiles>
+    <!-- -DskipTests ensures license libraries aren't required when packaging -->
     <profile>
-      <id>release</id>
+      <id>check-license</id>
+      <activation>
+        <property>
+          <name>!skipTests</name>
+        </property>
+      </activation>
       <build>
         <plugins>
-          <!-- Creates source jar -->
           <plugin>
-            <artifactId>maven-source-plugin</artifactId>
-            <version>${maven-source-plugin.version}</version>
-            <executions>
-              <execution>
-                <id>attach-sources</id>
-                <goals>
-                  <goal>jar</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-          <!-- Creates javadoc jar, skipping internal classes -->
-          <plugin>
-            <artifactId>maven-javadoc-plugin</artifactId>
-            <version>${maven-javadoc-plugin.version}</version>
+            <groupId>com.mycila</groupId>
+            <artifactId>license-maven-plugin</artifactId>
+            <version>${license-maven-plugin.version}</version>
             <configuration>
-              <sourceFileExcludes>
-                <exclude>**/internal/*.java</exclude>
-                <exclude>**/Internal*.java</exclude>
-              </sourceFileExcludes>
-              <excludePackageNames>*.internal.*</excludePackageNames>
-              <failOnError>false</failOnError>
-              <!-- hush pedantic warnings: we don't put param and return on everything! -->
-              <doclint>none</doclint>
-              <!-- While we publish modules, our source is pre-Java9 so tell javadoc that. -->
-              <source>8</source>
+              <header>${main.basedir}/src/etc/header.txt</header>
+              <mapping>
+                <!-- Don't use javadoc style as this makes code formatters break it by adding tags! -->
+                <java>SLASHSTAR_STYLE</java>
+                <!-- build-bin/docker -->
+                <block_on_health>SCRIPT_STYLE</block_on_health>
+                <configure_docker>SCRIPT_STYLE</configure_docker>
+                <configure_docker_push>SCRIPT_STYLE</configure_docker_push>
+                <docker_arch>SCRIPT_STYLE</docker_arch>
+                <docker_args>SCRIPT_STYLE</docker_args>
+                <docker_build>SCRIPT_STYLE</docker_build>
+                <docker_push>SCRIPT_STYLE</docker_push>
+                <!-- build-bin/git -->
+                <login_git>SCRIPT_STYLE</login_git>
+                <version_from_trigger_tag>SCRIPT_STYLE</version_from_trigger_tag>
+                <!-- build-bin/gpg -->
+                <configure_gpg>SCRIPT_STYLE</configure_gpg>
+                <!-- build-bin/maven -->
+                <maven_build_or_unjar>SCRIPT_STYLE</maven_build_or_unjar>
+                <maven_deploy>SCRIPT_STYLE</maven_deploy>
+                <maven_go_offline>SCRIPT_STYLE</maven_go_offline>
+                <maven_release>SCRIPT_STYLE</maven_release>
+                <maven_unjar>SCRIPT_STYLE</maven_unjar>
+              </mapping>
+              <excludes>
+                <exclude>.docker.env</exclude>
+                <exclude>.gitignore</exclude>
+                <exclude>.editorconfig</exclude>
+                <exclude>.mvn/**</exclude>
+                <exclude>mvnw*</exclude>
+                <exclude>etc/header.txt</exclude>
+                <exclude>**/.idea/**</exclude>
+                <exclude>LICENSE</exclude>
+                <exclude>**/*.md</exclude>
+                <exclude>**/bnd.bnd</exclude>
+                <exclude>src/test/resources/**</exclude>
+                <exclude>src/main/resources/**</exclude>
+                <exclude>build-bin/*</exclude>
+              </excludes>
+              <strictCheck>true</strictCheck>
             </configuration>
+            <dependencies>
+              <dependency>
+                <groupId>com.mycila</groupId>
+                <artifactId>license-maven-plugin-git</artifactId>
+                <version>${license-maven-plugin.version}</version>
+              </dependency>
+            </dependencies>
             <executions>
               <execution>
-                <id>attach-javadocs</id>
                 <goals>
-                  <goal>jar</goal>
+                  <goal>check</goal>
                 </goals>
-                <phase>package</phase>
+                <phase>compile</phase>
               </execution>
             </executions>
           </plugin>
         </plugins>
       </build>
     </profile>
+
+    <!-- -DskipTests ensures benchmarks don't end up in javadocs or in Maven Central -->
+    <profile>
+      <id>include-benchmarks</id>
+      <activation>
+        <property>
+          <name>!skipTests</name>
+        </property>
+      </activation>
+      <modules>
+        <module>benchmarks</module>
+      </modules>
+    </profile>
+
     <profile>
       <id>error-prone-9+</id>
       <activation>
@@ -507,6 +484,7 @@
         </plugins>
       </build>
     </profile>
+
     <profile>
       <id>module-info</id>
       <!-- Build profiles can only consider static properties, such as files or ENV variables.
@@ -563,25 +541,83 @@
         </plugins>
       </build>
     </profile>
+
     <profile>
-      <id>sonatype</id>
-      <distributionManagement>
-        <repository>
-          <id>sonatype</id>
-          <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
-        </repository>
-      </distributionManagement>
+      <id>release</id>
       <build>
         <plugins>
           <plugin>
+            <groupId>org.sonatype.plugins</groupId>
+            <artifactId>nexus-staging-maven-plugin</artifactId>
+            <extensions>true</extensions>
+            <configuration>
+              <serverId>ossrh</serverId>
+              <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+              <!-- Double the normal timeout even though we haven't had a problem in this project.
+                   The only outcome of timing out client side is trying again. -->
+              <stagingProgressTimeoutMinutes>10</stagingProgressTimeoutMinutes>
+              <autoReleaseAfterClose>true</autoReleaseAfterClose>
+            </configuration>
+          </plugin>
+
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>
             <version>1.6</version>
             <executions>
               <execution>
-                <id>sign-release-artifacts</id>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
                 <goals>
                   <goal>sign</goal>
                 </goals>
+                <configuration>
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+
+          <!-- Creates source jar -->
+          <plugin>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>${maven-source-plugin.version}</version>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <!-- Creates javadoc jar, skipping internal classes -->
+          <plugin>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>${maven-javadoc-plugin.version}</version>
+            <configuration>
+              <sourceFileExcludes>
+                <exclude>**/internal/*.java</exclude>
+                <exclude>**/Internal*.java</exclude>
+              </sourceFileExcludes>
+              <excludePackageNames>*.internal.*</excludePackageNames>
+              <failOnError>false</failOnError>
+              <!-- hush pedantic warnings: we don't put param and return on everything! -->
+              <doclint>none</doclint>
+              <!-- While we publish modules, our source is pre-Java9 so tell javadoc that. -->
+              <source>8</source>
+            </configuration>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+                <phase>package</phase>
               </execution>
             </executions>
           </plugin>
