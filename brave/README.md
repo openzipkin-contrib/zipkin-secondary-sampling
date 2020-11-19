@@ -4,16 +4,9 @@
 
 ### Gradle
 
-```groovy
-    repositories {
-        // --snip--
-        maven { url 'https://jitpack.io' }
-    }
-```
-
 Depend on this:
 ```groovy
-    implementation 'com.github.openzipkin-contrib.zipkin-secondary-sampling:brave-secondary-sampling:master-SNAPSHOT'
+    implementation 'com.github.openzipkin-contrib.zipkin-secondary-sampling:brave-secondary-sampling:CURRENT_RELEASE'
 ```
 
 Exclude brave from transitive deps
@@ -25,22 +18,13 @@ Exclude brave from transitive deps
 ```
 
 ### Maven
-Setup this:
-```xml
-  <repositories>
-    <repository>
-      <id>jitpack.io</id>
-      <url>https://jitpack.io</url>
-    </repository>
-  </repositories>
-```
 
 Depend on this:
 ```xml
   <dependency>
     <groupId>io.zipkin.contrib.zipkin-secondary-sampling</groupId>
     <artifactId>brave-secondary-sampling</artifactId>
-    <version>master-SNAPSHOT</version>
+    <version>CURRENT_RELEASE</version>
   </dependency>
 ```
 
@@ -61,3 +45,14 @@ Exclude brave from transitive deps
 ```
 
 TODO more instructions
+
+## Artifacts
+All artifacts publish to the group ID "io.zipkin.contrib.zipkin-secondary-sampling". We use a common
+release version for all components.
+
+### Library Releases
+Releases are at [Sonatype](https://oss.sonatype.org/content/repositories/releases) and [Maven Central](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22io.zipkin.contrib.zipkin-secondary-sampling%22)
+
+### Library Snapshots
+Snapshots are uploaded to [Sonatype](https://oss.sonatype.org/content/repositories/snapshots) after
+commits to master.

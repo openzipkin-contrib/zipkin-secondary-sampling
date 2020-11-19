@@ -1,0 +1,37 @@
+# yamllint --format github .github/workflows/create_release.yml
+---
+name: create_release
+
+# We create a release version on a trigger tag, regardless of if the commit is documentation-only.
+#
+# See https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet
+on:
+  push:
+    tags: 'release-[0-9]+.[0-9]+.[0-9]+**'  # Ex. release-1.2.3
+
+jobs:
+  create_release:
+    runs-on: ubuntu-20.04  # newest available distribution, aka focal
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1  # only needed to get the sha label
+      - name: Cache Maven Artifacts
+        uses: actions/cache@v1
+        with:
+          path: ~/.m2/repository
+          key: m2-repository-${{ hashFiles('**/pom.xml') }}
+      - name: Configure Release
+        run: build-bin/git/login_git
+        env:
+          # GH_USER=<user that created GH_TOKEN>
+          GH_USER: ${{ secrets.GH_USER }}
+          # GH_TOKEN=<hex token value>
+          #   - makes release commits and tags
+          #   - needs repo:status, public_repo
+          #   - referenced in .settings.xml
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Create Release
+        # GITHUB_REF will be refs/tags/release-N.M.L
+        run: build-bin/maven/maven_release $(echo ${GITHUB_REF} | cut -d/ -f 3)
