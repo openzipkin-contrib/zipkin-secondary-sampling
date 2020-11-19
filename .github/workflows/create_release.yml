@@ -23,8 +23,7 @@ jobs:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
-      - name: Configure Release
-        run: build-bin/git/login_git
+      - name: Create Release
         env:
           # GH_USER=<user that created GH_TOKEN>
           GH_USER: ${{ secrets.GH_USER }}
@@ -33,6 +32,6 @@ jobs:
           #   - needs repo:status, public_repo
           #   - referenced in .settings.xml
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-      - name: Create Release
-        # GITHUB_REF will be refs/tags/release-N.M.L
-        run: build-bin/maven/maven_release $(echo ${GITHUB_REF} | cut -d/ -f 3)
+        run: |  # GITHUB_REF will be refs/tags/release-N.M.L
+         build-bin/git/login_git &&
+         build-bin/maven/maven_release $(echo ${GITHUB_REF} | cut -d/ -f 3)

@@ -46,6 +46,9 @@ the scripts it uses.
 The `on:` section obviates job creation and resource usage for irrelevant events. Notably, GitHub
 Actions includes the ability to skip documentation-only jobs.
 
+Combine [configure_test] and [test] into the same `run:` when `configure_test` primes file system
+cache.
+
 Here's a partial `test.yml` including only the aspects mentioned above.
 ```yaml
 on:
@@ -65,9 +68,7 @@ jobs:
         with:
           fetch-depth: 0  # full git history
       - name: Test
-        run: |
-          build-bin/configure_test
-          build-bin/test
+        run: build-bin/configure_test && build-bin/test
 ```
 
 ### Example Travis setup
@@ -118,6 +119,9 @@ The `on:` section obviates job creation and resource usage for irrelevant events
 cannot implement "master, except documentation only-commits" in the same file. Hence, deployments of
 master will happen even on README change.
 
+Combine [configure_deploy] and [deploy] into the same `run:` when `configure_deploy` primes file
+system cache.
+
 Here's a partial `deploy.yml` including only the aspects mentioned above. Notice env variables are
 explicitly defined and `on.tags` is a [glob pattern](https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet).
 ```yaml
@@ -133,16 +137,15 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 1  # only needed to get the sha label
-      - name: Configure Deploy
-        run: build-bin/configure_deploy
+      - name: Deploy
         env:
           GH_USER: ${{ secrets.GH_USER }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-      - name: Deploy
-        # GITHUB_REF will be refs/heads/master or refs/tags/1.2.3
-        run: build-bin/deploy $(echo ${GITHUB_REF} | cut -d/ -f 3)
+        run: |  # GITHUB_REF will be refs/heads/master or refs/tags/N.M.L
+          build-bin/configure_deploy &&
+          build-bin/deploy $(echo ${GITHUB_REF} | cut -d/ -f 3)
 ```
-'[0-9]+.[0-9]+.[0-9]+**'
+
 ### Example Travis setup
 `.travis.yml` is a monolithic configuration file broken into stages. This means `test` and `deploy`
 are in the same file. A simplest Travis `deploy` stage has two jobs: one for master pushes and
