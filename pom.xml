@@ -54,14 +54,13 @@
     <brave.run.version>${brave.version}</brave.run.version>
 
     <animal-sniffer-maven-plugin.version>1.19</animal-sniffer-maven-plugin.version>
+    <go-offline-maven-plugin.version>1.2.7</go-offline-maven-plugin.version>
     <!-- TODO: cleanup any redundant ignores now also in the 4.0 release (once final) -->
     <license-maven-plugin.version>4.0.rc2</license-maven-plugin.version>
     <maven-bundle-plugin.version>5.1.1</maven-bundle-plugin.version>
     <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>3.0.0-M1</maven-deploy-plugin.version>
     <maven-enforcer-plugin.version>3.0.0-M3</maven-enforcer-plugin.version>
-    <!-- 3.0.0-M5 breaks the build: https://github.com/openzipkin/zipkin/issues/3159 -->
-    <maven-failsafe-plugin.version>3.0.0-M4</maven-failsafe-plugin.version>
     <maven-install-plugin.version>3.0.0-M1</maven-install-plugin.version>
     <maven-invoker-plugin.version>3.2.1</maven-invoker-plugin.version>
     <maven-javadoc-plugin.version>3.2.0</maven-javadoc-plugin.version>
@@ -69,6 +68,7 @@
     <maven-release-plugin.version>3.0.0-M1</maven-release-plugin.version>
     <maven-shade-plugin.version>3.2.4</maven-shade-plugin.version>
     <maven-source-plugin.version>3.2.1</maven-source-plugin.version>
+    <maven-surefire-plugin.version>3.0.0-M5</maven-surefire-plugin.version>
     <nexus-staging-maven-plugin.version>1.6.8</nexus-staging-maven-plugin.version>
   </properties>
 
@@ -126,16 +126,16 @@
   </distributionManagement>
 
   <dependencyManagement>
-    <!-- Be careful here, especially to not import BOMs as io.zipkin.brave:brave has this parent.
+    <!-- Be careful here, especially to not import BOMs as it causes version confusion.
 
-         For example, if you imported Netty's BOM here, using Brave would also download that BOM. As
+         For example, if you imported Netty's BOM here, end users would also download that BOM. As
          Brave is indirectly used, this can be extremely confusing when people are troubleshooting
          library version assignments. -->
   </dependencyManagement>
 
   <dependencies>
-    <!-- Do not add compile dependencies here. This can cause problems for libraries that depend on
-         io.zipkin.brave:brave difficult to unravel. -->
+    <!-- Only add absolutely required dependencies as compile scope. Adding more can pin versions,
+         causing problems for end users difficult to unravel. -->
 
     <dependency>
       <groupId>junit</groupId>
@@ -168,7 +168,25 @@
         <plugin>
           <groupId>de.qaware.maven</groupId>
           <artifactId>go-offline-maven-plugin</artifactId>
-          <version>1.2.7</version>
+          <version>${go-offline-maven-plugin.version}</version>
+          <configuration>
+            <!-- Add dependencies indirectly referenced by build plugins -->
+            <dynamicDependencies>
+              <DynamicDependency>
+                <groupId>org.codehaus.mojo.signature</groupId>
+                <artifactId>${main.signature.artifact}</artifactId>
+                <version>1.0</version>
+                <type>signature</type>
+                <repositoryType>MAIN</repositoryType>
+              </DynamicDependency>
+              <DynamicDependency>
+                <groupId>org.apache.maven.surefire</groupId>
+                <artifactId>surefire-junit-platform</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
+                <repositoryType>PLUGIN</repositoryType>
+              </DynamicDependency>
+            </dynamicDependencies>
+          </configuration>
         </plugin>
 
         <plugin>
@@ -246,12 +264,12 @@
 
       <plugin>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>${maven-failsafe-plugin.version}</version>
+        <version>${maven-surefire-plugin.version}</version>
       </plugin>
 
       <plugin>
         <artifactId>maven-failsafe-plugin</artifactId>
-        <version>${maven-failsafe-plugin.version}</version>
+        <version>${maven-surefire-plugin.version}</version>
         <executions>
           <execution>
             <id>integration-test</id>
