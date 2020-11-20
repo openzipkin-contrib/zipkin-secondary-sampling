@@ -60,6 +60,8 @@
     <maven-bundle-plugin.version>5.1.1</maven-bundle-plugin.version>
     <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>3.0.0-M1</maven-deploy-plugin.version>
+    <!-- Use same version as https://github.com/openzipkin/docker-java -->
+    <maven-dependency-plugin.version>3.1.2</maven-dependency-plugin.version>
     <maven-enforcer-plugin.version>3.0.0-M3</maven-enforcer-plugin.version>
     <maven-install-plugin.version>3.0.0-M1</maven-install-plugin.version>
     <maven-invoker-plugin.version>3.2.1</maven-invoker-plugin.version>
@@ -195,76 +197,64 @@
           </configuration>
         </plugin>
 
+        <!-- maven-dependency-plugin:get and Retrolambda should use a recent version. -->
         <plugin>
-          <artifactId>maven-compiler-plugin</artifactId>
-          <version>${maven-compiler-plugin.version}</version>
-          <inherited>true</inherited>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>${maven-dependency-plugin.version}</version>
+        </plugin>
+
+        <!-- Uploads occur as a last step (which also adds checksums) -->
+        <plugin>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <version>${maven-deploy-plugin.version}</version>
+        </plugin>
+
+        <plugin>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>${maven-install-plugin.version}</version>
+        </plugin>
+
+        <plugin>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>${maven-jar-plugin.version}</version>
           <configuration>
-            <!-- Retrolambda will rewrite lambdas as Java 6 bytecode -->
-            <source>1.8</source>
-            <target>1.8</target>
-            <!-- or die! com.sun.tools.javac.api.JavacTool -->
-            <fork>true</fork>
-            <showWarnings>true</showWarnings>
+            <archive>
+              <!-- prevents huge pom file from also being added to the jar under META-INF/maven -->
+              <addMavenDescriptor>false</addMavenDescriptor>
+            </archive>
           </configuration>
+        </plugin>
+
+        <plugin>
+          <artifactId>maven-release-plugin</artifactId>
+          <version>${maven-release-plugin.version}</version>
+          <configuration>
+            <useReleaseProfile>false</useReleaseProfile>
+            <releaseProfiles>release</releaseProfiles>
+            <autoVersionSubmodules>true</autoVersionSubmodules>
+            <!-- to match zipkin-scala (openzipkin/zipkin) -->
+            <tagNameFormat>@{project.version}</tagNameFormat>
+          </configuration>
+        </plugin>
+
+        <plugin>
+          <groupId>org.sonatype.plugins</groupId>
+          <artifactId>nexus-staging-maven-plugin</artifactId>
+          <version>${nexus-staging-maven-plugin.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>
 
-    <resources>
-      <resource>
-        <filtering>false</filtering>
-        <directory>src/main/resources</directory>
-      </resource>
-      <resource>
-        <filtering>false</filtering>
-        <directory>src/main/java</directory>
-        <includes>
-          <include>**</include>
-        </includes>
-        <excludes>
-          <exclude>**/*.java</exclude>
-        </excludes>
-      </resource>
-      <!-- This adds the LICENSE and NOTICE file to the jar and -sources jar of each module -->
-      <resource>
-        <filtering>false</filtering>
-        <directory>${main.basedir}</directory>
-        <targetPath>META-INF/</targetPath>
-        <includes>
-          <include>LICENSE</include>
-          <include>NOTICE</include>
-        </includes>
-      </resource>
-    </resources>
-
     <plugins>
       <plugin>
-        <groupId>net.orfjackal.retrolambda</groupId>
-        <artifactId>retrolambda-maven-plugin</artifactId>
-        <version>2.5.7</version>
-        <executions>
-          <execution>
-            <goals>
-              <goal>process-main</goal>
-            </goals>
-            <configuration>
-              <target>${main.java.version}</target>
-              <fork>true</fork>
-              <quiet>true</quiet>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
-      <plugin>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>${maven-jar-plugin.version}</version>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>${maven-compiler-plugin.version}</version>
+        <inherited>true</inherited>
         <configuration>
-          <archive>
-            <!-- prevents huge pom file from also being added to the jar under META-INF/maven -->
-            <addMavenDescriptor>false</addMavenDescriptor>
-          </archive>
+          <source>1.8</source>
+          <target>1.8</target>
+          <fork>true</fork>
+          <showWarnings>true</showWarnings>
         </configuration>
       </plugin>
 
@@ -284,6 +274,24 @@
               <goal>integration-test</goal>
               <goal>verify</goal>
             </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>net.orfjackal.retrolambda</groupId>
+        <artifactId>retrolambda-maven-plugin</artifactId>
+        <version>2.5.7</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>process-main</goal>
+            </goals>
+            <configuration>
+              <target>${main.java.version}</target>
+              <fork>true</fork>
+              <quiet>true</quiet>
+            </configuration>
           </execution>
         </executions>
       </plugin>
@@ -337,28 +345,6 @@
       </plugin>
 
       <plugin>
-        <artifactId>maven-install-plugin</artifactId>
-        <version>${maven-install-plugin.version}</version>
-      </plugin>
-
-      <!-- Uploads occur as a last step (which also adds checksums) -->
-      <plugin>
-        <artifactId>maven-deploy-plugin</artifactId>
-        <version>${maven-deploy-plugin.version}</version>
-      </plugin>
-      <plugin>
-        <artifactId>maven-release-plugin</artifactId>
-        <version>${maven-release-plugin.version}</version>
-        <configuration>
-          <useReleaseProfile>false</useReleaseProfile>
-          <releaseProfiles>release</releaseProfiles>
-          <autoVersionSubmodules>true</autoVersionSubmodules>
-          <!-- to match zipkin-scala (openzipkin/zipkin) -->
-          <tagNameFormat>@{project.version}</tagNameFormat>
-        </configuration>
-      </plugin>
-
-      <plugin>
         <artifactId>maven-enforcer-plugin</artifactId>
         <version>${maven-enforcer-plugin.version}</version>
         <executions>
@@ -378,6 +364,19 @@
         </executions>
       </plugin>
     </plugins>
+
+    <resources>
+      <!-- This adds the LICENSE and NOTICE file to the jar and -sources jar of each module -->
+      <resource>
+        <filtering>false</filtering>
+        <directory>${main.basedir}</directory>
+        <targetPath>META-INF/</targetPath>
+        <includes>
+          <include>LICENSE</include>
+          <include>NOTICE</include>
+        </includes>
+      </resource>
+    </resources>
   </build>
 
   <profiles>
