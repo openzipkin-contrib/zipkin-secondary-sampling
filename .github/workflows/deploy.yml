@@ -8,7 +8,8 @@ name: deploy
 # See https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet
 on:
   push:
-    # don't deploy tags: '[0-9]+.[0-9]+.[0-9]+**' as it will conflict with master
+    # Don't deploy tags as they conflict with [maven-release-plugin] prepare release N.M.L
+    tags: ''
     branches: master
 
 jobs:
