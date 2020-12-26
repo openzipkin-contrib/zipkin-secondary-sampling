@@ -39,8 +39,8 @@ public final class MutableSecondarySamplingState {
       .build();
   static final Handler<MutableSecondarySamplingState> HANDLER =
       (target, input, beginKey, endKey, beginValue, endValue) -> {
-        String key = input.substring(beginKey, endKey);
-        String value = input.substring(beginValue, endValue);
+        String key = input.subSequence(beginKey, endKey).toString();
+        String value = input.subSequence(beginValue, endValue).toString();
         target.parameter(key, value);
         return true;
       };

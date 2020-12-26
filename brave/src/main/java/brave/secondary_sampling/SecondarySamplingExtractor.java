@@ -77,7 +77,7 @@ final class SecondarySamplingExtractor<R> implements Extractor<R> {
   /** Parses the input into {@link SecondarySamplingDecisions} */
   Handler<SecondarySamplingDecisions> handlerForRequest(Object request) {
     return (target, input, beginKey, endKey, beginValue, endValue) -> {
-      String key = input.substring(beginKey, endKey);
+      String key = input.subSequence(beginKey, endKey).toString();
       MutableSecondarySamplingState state = MutableSecondarySamplingState.create(key);
       if (beginValue != endValue) {
         MutableSecondarySamplingState.PARAMETER_SPLITTER.parse(
