@@ -186,9 +186,12 @@ public final class SecondarySampling extends Propagation.Factory
     return SecondarySamplingDecisions.FACTORY.decorate(result);
   }
 
-  @Override public <K> Propagation<K> create(KeyFactory<K> keyFactory) {
-    // This is deprecated, but won't be removed in Brave v6, as doing so would create revlock.
-    throw new UnsupportedOperationException("As of Brave v5.12, call PropagationFactory.get()");
+  /**
+   * @deprecated end users and instrumentation should never call this, and instead use
+   * {@link #get()}. This only remains to avoid rev-lock upgrading to Brave 6.
+   */
+  @Deprecated public <K> Propagation<K> create(KeyFactory<K> unused) {
+    throw new UnsupportedOperationException("As of Brave 5.12, call PropagationFactory.get()");
   }
 
   @Override public Propagation<String> get() {
