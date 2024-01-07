@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2020 The OpenZipkin Authors
+ * Copyright 2019-2024 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -20,7 +20,6 @@ import brave.http.HttpRequest;
 import brave.http.HttpTracing;
 import brave.http.HttpTracingCustomizer;
 import brave.internal.Nullable;
-import brave.internal.propagation.StringPropagationAdapter;
 import brave.propagation.Propagation;
 import brave.propagation.TraceContext;
 import brave.propagation.TraceContext.Extractor;
@@ -187,12 +186,13 @@ public final class SecondarySampling extends Propagation.Factory
     return SecondarySamplingDecisions.FACTORY.decorate(result);
   }
 
-  @Override public Propagation<String> get() {
-    return this;
+  @Override public <K> Propagation<K> create(KeyFactory<K> keyFactory) {
+    // This is deprecated, but won't be removed in Brave v6, as doing so would create revlock.
+    throw new UnsupportedOperationException("As of Brave v5.12, call PropagationFactory.get()");
   }
 
-  @Override public <K> Propagation<K> create(KeyFactory<K> keyFactory) {
-    return StringPropagationAdapter.create(this, keyFactory);
+  @Override public Propagation<String> get() {
+    return this;
   }
 
   @Override public <R> Injector<R> injector(Setter<R, String> setter) {

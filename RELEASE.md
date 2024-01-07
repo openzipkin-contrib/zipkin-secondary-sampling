@@ -57,7 +57,7 @@ In-between, re-apply the licenses.
 ```bash
 $ ./mvnw versions:set -DnewVersion=1.3.3-SNAPSHOT -DgenerateBackupPoms=false
 $ ./mvnw com.mycila:license-maven-plugin:format
-$ ./mvnw versions:set -DnewVersion=1.3.2-SNAPSHOT -DgenerateBackupPoms=false
+$ ./mvnw versions:set -DnewVersion=0.3.7-SNAPSHOT -DgenerateBackupPoms=false
 $ git commit -am"Adjusts copyright headers for this year"
 ```
 
