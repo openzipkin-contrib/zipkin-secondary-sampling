@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2020 The OpenZipkin Authors
+ * Copyright 2019-2024 The OpenZipkin Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -159,7 +159,7 @@ class TracedNode {
     FakeHttpRequest.Server serverRequest = new FakeHttpRequest.Server(clientRequest);
     Span span = serverHandler.handleReceive(serverRequest);
     callDownstream(serverRequest.path(), span);
-    serverHandler.handleSend(new FakeHttpResponse.Server(), null, span);
+    serverHandler.handleSend(new FakeHttpResponse.Server(), span);
   }
 
   void execute(FakeRpcRequest.Client clientRequest) {
@@ -187,7 +187,7 @@ class TracedNode {
     FakeHttpRequest.Client clientRequest = new FakeHttpRequest.Client(path);
     Span span = clientHandler.handleSend(clientRequest);
     down.execute(clientRequest);
-    clientHandler.handleReceive(new FakeHttpResponse.Client(), null, span);
+    clientHandler.handleReceive(new FakeHttpResponse.Client(), span);
   }
 
   void callDownstreamRpc(String method, TracedNode down) {
